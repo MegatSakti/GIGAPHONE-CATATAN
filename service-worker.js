@@ -1,4 +1,4 @@
-const CACHE_NAME = "gigaphone-finance-v8";
+const CACHE_NAME = "gigaphone-finance-v9-ledger";
 const ASSETS = [
   "./",
   "./index.html",

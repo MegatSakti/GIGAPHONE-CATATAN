@@ -335,6 +335,13 @@ h2 {
   margin: 0;
 }
 
+.transaction-item .account-flow {
+  display: inline-block;
+  margin-top: 5px;
+  color: var(--blue-700);
+  font-weight: 750;
+}
+
 .money-in,
 .profit-positive {
   color: var(--success);

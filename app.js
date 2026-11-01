@@ -44,6 +44,7 @@ const el = {
   costInput: document.querySelector("#costInput"),
   sellInput: document.querySelector("#sellInput"),
   accountInput: document.querySelector("#accountInput"),
+  accountFieldLabel: document.querySelector("#accountField span"),
   costField: document.querySelector("#costField span"),
   sellField: document.querySelector("#sellField span"),
   previewIn: document.querySelector("#previewIn"),
@@ -111,11 +112,13 @@ function saveState() {
 }
 
 function ensureAccountDefaults() {
-  const existing = new Map(state.accounts.map((account) => [account.id, account]));
+  const savedAccounts = Array.isArray(state.accounts) ? state.accounts : [];
+  const existing = new Map(savedAccounts.map((account) => [account.id, account]));
+  const defaultIds = new Set(ACCOUNT_DEFAULTS.map((account) => account.id));
   state.accounts = ACCOUNT_DEFAULTS.map((account) => ({
     ...account,
     ...(existing.get(account.id) || {})
-  }));
+  })).concat(savedAccounts.filter((account) => !defaultIds.has(account.id)));
   saveState();
 }
 
@@ -127,8 +130,23 @@ function populateSelects() {
 
 function refreshAccountSelects() {
   const accountOptions = state.accounts.map((account) => `<option value="${account.id}">${account.name}</option>`).join("");
-  el.accountInput.innerHTML = accountOptions;
   el.historyAccountFilter.innerHTML = `<option value="">Semua Akun</option>${accountOptions}`;
+  updateTransactionAccountOptions();
+}
+
+function updateTransactionAccountOptions() {
+  const selected = el.accountInput.value;
+  const type = el.typeInput.value;
+  const bankOnly = isTopUp(type) || type === "Tarik Tunai";
+  const accounts = bankOnly ? state.accounts.filter((account) => account.id !== "cash") : state.accounts;
+  el.accountInput.innerHTML = accounts.map((account) => `<option value="${account.id}">${account.name}</option>`).join("");
+  if (accounts.some((account) => account.id === selected)) {
+    el.accountInput.value = selected;
+  }
+}
+
+function isTopUp(type) {
+  return ["Top Up DANA", "Top Up GoPay", "Top Up OVO", "Paket Data"].includes(type);
 }
 
 function bindEvents() {
@@ -200,9 +218,21 @@ function saveTransaction(event) {
   const type = el.typeInput.value;
   const cost = toNumber(el.costInput.value);
   const sellRaw = toNumber(el.sellInput.value);
+  const isTopUpTransaction = isTopUp(type);
   const isCashWithdraw = type === "Tarik Tunai";
   const isExpense = type === "Belanja Kebutuhan";
   const moneyIn = isExpense ? 0 : isCashWithdraw ? cost + sellRaw : sellRaw;
+  const selectedAccountId = el.accountInput.value;
+  const cashId = state.accounts.find((account) => account.id === "cash")?.id || "cash";
+  const sourceAccountId = isTopUpTransaction ? selectedAccountId : isCashWithdraw ? cashId : selectedAccountId;
+  const destinationAccountId = isTopUpTransaction ? cashId : isCashWithdraw ? selectedAccountId : selectedAccountId;
+  const movements = isTopUpTransaction
+    ? [{ accountId: sourceAccountId, amount: -cost }, { accountId: destinationAccountId, amount: sellRaw }]
+    : isCashWithdraw
+      ? [{ accountId: sourceAccountId, amount: -cost }, { accountId: destinationAccountId, amount: moneyIn }]
+      : isExpense
+        ? [{ accountId: selectedAccountId, amount: -cost }]
+        : [{ accountId: selectedAccountId, amount: -cost }, { accountId: selectedAccountId, amount: sellRaw }];
 
   const transaction = {
     id: el.transactionId.value || crypto.randomUUID(),
@@ -213,7 +243,10 @@ function saveTransaction(event) {
     sell: moneyIn,
     fee: isCashWithdraw ? sellRaw : null,
     expense: isExpense,
-    accountId: el.accountInput.value,
+    accountId: selectedAccountId,
+    sourceAccountId,
+    destinationAccountId,
+    movements,
     createdAt: el.transactionId.value ? getExistingCreatedAt(el.transactionId.value) : new Date().toISOString()
   };
 
@@ -289,10 +322,13 @@ function resetForm() {
 }
 
 function updateTransactionFormLabels() {
+  updateTransactionAccountOptions();
   const isCashWithdraw = el.typeInput.value === "Tarik Tunai";
+  const isTopUpTransaction = isTopUp(el.typeInput.value);
   const isExpense = el.typeInput.value === "Belanja Kebutuhan";
-  el.costField.textContent = isExpense ? "Nominal Belanja" : isCashWithdraw ? "Nominal Tarik Tunai" : "Modal / Nominal Keluar";
-  el.sellField.textContent = isExpense ? "Uang Masuk" : isCashWithdraw ? "Fee" : "Harga Jual / Fee";
+  el.costField.textContent = isExpense ? "Nominal Belanja" : isCashWithdraw ? "Nominal Tarik Tunai (keluar Cash)" : isTopUpTransaction ? "Modal (keluar bank)" : "Modal / Nominal Keluar";
+  el.sellField.textContent = isExpense ? "Uang Masuk" : isCashWithdraw ? "Fee" : isTopUpTransaction ? "Harga Jual (masuk Cash)" : "Harga Jual / Fee";
+  el.accountFieldLabel.textContent = isTopUpTransaction ? "Akun Bank Sumber" : isCashWithdraw ? "Akun Bank Tujuan" : "Akun";
   el.sellInput.placeholder = isCashWithdraw ? "Contoh: 5000" : "0";
   el.sellInput.disabled = isExpense;
   el.sellInput.required = !isExpense;
@@ -354,11 +390,12 @@ function renderHistory() {
   const date = el.historyDateFilter.value;
 
   const filtered = getSortedTransactions().filter((transaction) => {
-    const accountName = getAccountName(transaction.accountId).toLowerCase();
-    const text = `${transaction.type} ${transaction.description || ""} ${accountName}`.toLowerCase();
+    const accountIds = getTransactionMovements(transaction).map((movement) => movement.accountId);
+    const accountNames = [...new Set(accountIds)].map(getAccountName);
+    const text = `${transaction.type} ${transaction.description || ""} ${accountNames.join(" ")}`.toLowerCase();
     return (!search || text.includes(search)) &&
       (!type || transaction.type === type) &&
-      (!account || transaction.accountId === account) &&
+      (!account || accountIds.includes(account)) &&
       (!date || transaction.date === date);
   });
 
@@ -369,8 +406,8 @@ function renderReports() {
   el.reportTodayProfit.textContent = money(sumProfit(filterByToday(state.transactions)));
   el.reportWeekProfit.textContent = money(sumProfit(filterByCurrentWeek(state.transactions)));
   el.reportMonthProfit.textContent = money(sumProfit(filterByCurrentMonth(state.transactions)));
-  el.reportTotalIn.textContent = money(state.transactions.reduce((sum, item) => sum + item.sell, 0));
-  el.reportTotalOut.textContent = money(state.transactions.reduce((sum, item) => sum + item.cost, 0));
+  el.reportTotalIn.textContent = money(sumIn(state.transactions));
+  el.reportTotalOut.textContent = money(sumOut(state.transactions));
   el.reportTotalCount.textContent = state.transactions.length;
 
   el.typeBreakdown.innerHTML = TRANSACTION_TYPES.map((type) => {
@@ -379,8 +416,8 @@ function renderReports() {
   }).join("");
 
   el.accountBreakdown.innerHTML = getAccountSummaries().map((account) => {
-    const items = state.transactions.filter((item) => item.accountId === account.id);
-    return breakdownItem(account.name, items.length, sumProfit(items), account.totalIn, account.totalOut);
+    const items = state.transactions.filter((item) => getTransactionMovements(item).some((movement) => movement.accountId === account.id));
+    return breakdownItem(account.name, items.length, account.totalIn - account.totalOut, account.totalIn, account.totalOut, "Perubahan saldo");
   }).join("");
 }
 
@@ -441,6 +478,7 @@ function renderTransactionList(container, transactions, options = {}) {
   container.innerHTML = transactions.map((transaction) => {
     const profit = getProfit(transaction);
     const detail = transaction.description || "-";
+    const totals = getMovementTotals(transaction);
     return `
       <article class="transaction-item">
         <div>
@@ -449,16 +487,16 @@ function renderTransactionList(container, transactions, options = {}) {
             <small>${formatDate(transaction.date)}</small>
           </div>
           <p>${detail}</p>
-          <small>${getAccountName(transaction.accountId)}</small>
+          <small class="account-flow">${getAccountFlowLabel(transaction)}</small>
         </div>
         <div class="transaction-money">
           <div>
             <small>Keluar</small>
-            <strong class="money-out">${money(transaction.cost)}</strong>
+            <strong class="money-out">${money(totals.out)}</strong>
           </div>
           <div>
             <small>Masuk</small>
-            <strong class="money-in">${money(transaction.sell)}</strong>
+            <strong class="money-in">${money(totals.in)}</strong>
           </div>
           <div>
             <small>Profit</small>
@@ -476,7 +514,7 @@ function renderTransactionList(container, transactions, options = {}) {
   }).join("");
 }
 
-function breakdownItem(title, count, profit, totalIn, totalOut) {
+function breakdownItem(title, count, metricValue, totalIn, totalOut, metricLabel = "Profit") {
   return `
     <article class="breakdown-item">
       <div class="breakdown-row">
@@ -485,7 +523,7 @@ function breakdownItem(title, count, profit, totalIn, totalOut) {
       </div>
       <div class="account-line"><span>Masuk</span><span class="money-in">${money(totalIn)}</span></div>
       <div class="account-line"><span>Keluar</span><span class="money-out">${money(totalOut)}</span></div>
-      <div class="account-line"><span>Profit</span><strong class="${profit >= 0 ? "profit-positive" : "profit-negative"}">${money(profit)}</strong></div>
+      <div class="account-line"><span>${metricLabel}</span><strong class="${metricValue >= 0 ? "profit-positive" : "profit-negative"}">${money(metricValue)}</strong></div>
     </article>
   `;
 }
@@ -516,9 +554,7 @@ function getAccountLogo(accountId) {
 
 function getAccountSummaries() {
   return state.accounts.map((account) => {
-    const items = state.transactions.filter((item) => item.accountId === account.id);
-    const totalIn = sumIn(items);
-    const totalOut = sumOut(items);
+    const { totalIn, totalOut } = getAccountMovementTotals(account.id, state.transactions);
     return {
       ...account,
       totalIn,
@@ -541,9 +577,8 @@ function getDashboardAccountSummaries() {
   }
 
   return state.accounts.map((account) => {
-    const items = state.transactions.filter((item) => item.accountId === account.id && item.date === today);
-    const totalIn = sumIn(items);
-    const totalOut = sumOut(items);
+    const todayTransactions = state.transactions.filter((item) => item.date === today);
+    const { totalIn, totalOut } = getAccountMovementTotals(account.id, todayTransactions);
     const startingBalance = dailyBalances[account.id] ?? account.openingBalance;
 
     return {
@@ -580,11 +615,60 @@ function sumProfit(transactions) {
 }
 
 function sumIn(transactions) {
-  return transactions.reduce((sum, item) => sum + item.sell, 0);
+  return transactions.reduce((sum, item) => sum + getMovementTotals(item).in, 0);
 }
 
 function sumOut(transactions) {
-  return transactions.reduce((sum, item) => sum + item.cost, 0);
+  return transactions.reduce((sum, item) => sum + getMovementTotals(item).out, 0);
+}
+
+function getTransactionMovements(transaction) {
+  if (Array.isArray(transaction.movements)) {
+    return transaction.movements
+      .filter((movement) => movement && movement.accountId && Number.isFinite(Number(movement.amount)))
+      .map((movement) => ({ accountId: movement.accountId, amount: Number(movement.amount) }));
+  }
+
+  // Legacy transactions only stored accountId; preserve their original single-account net effect.
+  const accountId = transaction.accountId;
+  if (!accountId) return [];
+  const cost = Number(transaction.cost) || 0;
+  const sell = Number(transaction.sell) || 0;
+  if (transaction.type === "Belanja Kebutuhan" || transaction.expense) {
+    return [{ accountId, amount: -cost }];
+  }
+  return [{ accountId, amount: -cost }, { accountId, amount: sell }];
+}
+
+function getMovementTotals(transaction) {
+  return getTransactionMovements(transaction).reduce((totals, movement) => {
+    if (movement.amount > 0) totals.in += movement.amount;
+    if (movement.amount < 0) totals.out += Math.abs(movement.amount);
+    return totals;
+  }, { in: 0, out: 0 });
+}
+
+function getAccountMovementTotals(accountId, transactions) {
+  return transactions.reduce((totals, transaction) => {
+    getTransactionMovements(transaction).forEach((movement) => {
+      if (movement.accountId !== accountId) return;
+      if (movement.amount > 0) totals.totalIn += movement.amount;
+      if (movement.amount < 0) totals.totalOut += Math.abs(movement.amount);
+    });
+    return totals;
+  }, { totalIn: 0, totalOut: 0 });
+}
+
+function getAccountFlowLabel(transaction) {
+  const movements = getTransactionMovements(transaction);
+  const from = [...new Set(movements.filter((movement) => movement.amount < 0).map((movement) => movement.accountId))];
+  const to = [...new Set(movements.filter((movement) => movement.amount > 0).map((movement) => movement.accountId))];
+  if (from.length && to.length) {
+    if (from.length === 1 && to.length === 1 && from[0] === to[0]) return getAccountName(from[0]);
+    return `${from.map(getAccountName).join(" + ")} → ${to.map(getAccountName).join(" + ")}`;
+  }
+  const ids = [...new Set(movements.map((movement) => movement.accountId))];
+  return ids.length ? ids.map(getAccountName).join(" + ") : getAccountName(transaction.accountId);
 }
 
 function getAccountName(accountId) {
