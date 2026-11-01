@@ -180,6 +180,54 @@ h2 {
   object-position: left center;
 }
 
+.account-logo-button {
+  width: fit-content;
+  max-width: 100%;
+  padding: 0;
+  border: 0;
+  border-radius: 12px;
+  background: transparent;
+  cursor: pointer;
+}
+
+.account-logo-button:focus-visible {
+  outline: 3px solid rgba(20, 120, 239, 0.45);
+  outline-offset: 3px;
+}
+
+.balance-dialog {
+  width: min(92vw, 380px);
+  padding: 20px;
+  border: 1px solid var(--line);
+  border-radius: 20px;
+  color: var(--ink);
+  box-shadow: 0 24px 70px rgba(12, 61, 126, 0.25);
+}
+
+.balance-dialog::backdrop {
+  background: rgba(15, 31, 56, 0.48);
+  backdrop-filter: blur(3px);
+}
+
+.balance-dialog form {
+  gap: 14px;
+}
+
+.balance-dialog h2 {
+  margin: 0;
+}
+
+.balance-dialog .help-text {
+  line-height: 1.5;
+}
+
+.balance-dialog-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin-top: 4px;
+}
+
 .quick-actions {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));

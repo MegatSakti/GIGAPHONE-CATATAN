@@ -207,10 +207,26 @@
     </nav>
   </div>
 
+  <dialog class="balance-dialog" id="accountBalanceDialog" aria-labelledby="accountBalanceTitle">
+    <form id="accountBalanceForm">
+      <input id="balanceAccountId" type="hidden">
+      <h2 id="accountBalanceTitle">Update Saldo Akun</h2>
+      <p class="help-text">Masukkan saldo real saat ini. Transaksi hari ini tetap dihitung.</p>
+      <label>
+        <span>Saldo saat ini</span>
+        <input id="balanceValueInput" type="number" step="1" inputmode="numeric" required>
+      </label>
+      <div class="balance-dialog-actions">
+        <button class="secondary-button" id="cancelBalanceUpdate" type="button">Batal</button>
+        <button class="primary-button" type="submit">Simpan Saldo</button>
+      </div>
+    </form>
+  </dialog>
+
   <template id="emptyTemplate">
     <div class="empty-state">Belum ada data.</div>
   </template>
 
-  <script src="app.js?v=20261101-account-ledger"></script>
+  <script src="app.js?v=20261101-click-balance"></script>
 </body>
 </html>

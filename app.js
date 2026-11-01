@@ -33,6 +33,12 @@ const el = {
   todayCount: document.querySelector("#todayCount"),
   monthProfit: document.querySelector("#monthProfit"),
   dashboardAccounts: document.querySelector("#dashboardAccounts"),
+  accountBalanceDialog: document.querySelector("#accountBalanceDialog"),
+  accountBalanceForm: document.querySelector("#accountBalanceForm"),
+  accountBalanceTitle: document.querySelector("#accountBalanceTitle"),
+  balanceAccountId: document.querySelector("#balanceAccountId"),
+  balanceValueInput: document.querySelector("#balanceValueInput"),
+  cancelBalanceUpdate: document.querySelector("#cancelBalanceUpdate"),
   dailyBalanceShortcut: document.querySelector("#dailyBalanceShortcut"),
   quickActions: document.querySelector("#quickActions"),
   recentTransactions: document.querySelector("#recentTransactions"),
@@ -164,6 +170,9 @@ function bindEvents() {
   });
 
   el.transactionForm.addEventListener("submit", saveTransaction);
+  el.dashboardAccounts.addEventListener("click", openAccountBalanceDialog);
+  el.accountBalanceForm.addEventListener("submit", saveAccountBalance);
+  el.cancelBalanceUpdate.addEventListener("click", () => el.accountBalanceDialog.close());
   el.dailyBalanceShortcut.addEventListener("click", () => {
     navigate("settings");
     el.dailyBalanceDate.focus();
@@ -260,6 +269,48 @@ function saveTransaction(event) {
   saveState();
   resetForm();
   navigate("dashboard");
+  render();
+}
+
+function openAccountBalanceDialog(event) {
+  const button = event.target.closest("[data-update-account]");
+  if (!button) return;
+  const account = state.accounts.find((item) => item.id === button.dataset.updateAccount);
+  const summary = getDashboardAccountSummaries().find((item) => item.id === button.dataset.updateAccount);
+  if (!account || !summary) return;
+
+  el.balanceAccountId.value = account.id;
+  el.accountBalanceTitle.textContent = `Update Saldo ${account.name}`;
+  el.balanceValueInput.value = summary.balance;
+  el.accountBalanceDialog.showModal();
+  el.balanceValueInput.focus();
+  el.balanceValueInput.select();
+}
+
+function saveAccountBalance(event) {
+  event.preventDefault();
+  const accountId = el.balanceAccountId.value;
+  const targetBalance = toNumber(el.balanceValueInput.value);
+  const today = todayISO();
+  const account = state.accounts.find((item) => item.id === accountId);
+  if (!account) return;
+
+  const todayTransactions = state.transactions.filter((transaction) => transaction.date === today);
+  const currentBalances = getDashboardAccountSummaries();
+  const openingBalance = Number(account.openingBalance) || 0;
+  const lifetimeBalance = getAccountSummaries().find((item) => item.id === accountId)?.balance ?? openingBalance;
+  account.openingBalance = openingBalance + targetBalance - lifetimeBalance;
+
+  state.dailyBalances ||= {};
+  state.dailyBalances[today] = Object.fromEntries(state.accounts.map((account) => {
+    const currentBalance = currentBalances.find((item) => item.id === account.id)?.balance ?? account.openingBalance;
+    const { totalIn, totalOut } = getAccountMovementTotals(account.id, todayTransactions);
+    const startingBalance = currentBalance - totalIn + totalOut;
+    return [account.id, account.id === accountId ? targetBalance - totalIn + totalOut : startingBalance];
+  }));
+
+  saveState();
+  el.accountBalanceDialog.close();
   render();
 }
 
@@ -368,7 +419,9 @@ function renderDashboard() {
 
   el.dashboardAccounts.innerHTML = balances.map((account) => `
     <article class="account-card" title="${account.name}" aria-label="${account.name}">
-      <img class="account-logo" src="${getAccountLogo(account.id)}" alt="" aria-hidden="true" width="160" height="48">
+      <button class="account-logo-button" type="button" data-update-account="${account.id}" aria-label="Update saldo ${account.name}" title="Klik logo untuk update saldo" aria-haspopup="dialog">
+        <img class="account-logo" src="${getAccountLogo(account.id)}" alt="" aria-hidden="true" width="160" height="48">
+      </button>
       <strong>${money(account.balance)}</strong>
       <small>${account.usesDailyBalance ? "Awal hari ini" : "Awal"} ${money(account.startingBalance)}</small>
     </article>
