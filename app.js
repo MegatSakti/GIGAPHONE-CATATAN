@@ -7,7 +7,8 @@ const TRANSACTION_TYPES = [
   "Top Up OVO",
   "Paket Data",
   "Tarik Tunai",
-  "Belanja Kebutuhan"
+  "Belanja Kebutuhan",
+  "Setor Tunai"
 ];
 
 const ACCOUNT_DEFAULTS = [
@@ -143,7 +144,7 @@ function refreshAccountSelects() {
 function updateTransactionAccountOptions() {
   const selected = el.accountInput.value;
   const type = el.typeInput.value;
-  const bankOnly = isTopUp(type) || type === "Tarik Tunai";
+  const bankOnly = isTopUp(type) || type === "Tarik Tunai" || type === "Setor Tunai";
   const accounts = bankOnly ? state.accounts.filter((account) => account.id !== "cash") : state.accounts;
   el.accountInput.innerHTML = accounts.map((account) => `<option value="${account.id}">${account.name}</option>`).join("");
   if (accounts.some((account) => account.id === selected)) {
@@ -230,15 +231,18 @@ function saveTransaction(event) {
   const isTopUpTransaction = isTopUp(type);
   const isCashWithdraw = type === "Tarik Tunai";
   const isExpense = type === "Belanja Kebutuhan";
-  const moneyIn = isExpense ? 0 : isCashWithdraw ? cost + sellRaw : sellRaw;
+  const isCashDeposit = type === "Setor Tunai";
+  const moneyIn = isExpense ? 0 : isCashWithdraw ? cost + sellRaw : isCashDeposit ? cost : sellRaw;
   const selectedAccountId = el.accountInput.value;
   const cashId = state.accounts.find((account) => account.id === "cash")?.id || "cash";
-  const sourceAccountId = isTopUpTransaction ? selectedAccountId : isCashWithdraw ? cashId : selectedAccountId;
-  const destinationAccountId = isTopUpTransaction ? cashId : isCashWithdraw ? selectedAccountId : selectedAccountId;
+  const sourceAccountId = isTopUpTransaction ? selectedAccountId : isCashWithdraw || isCashDeposit ? cashId : selectedAccountId;
+  const destinationAccountId = isTopUpTransaction ? cashId : selectedAccountId;
   const movements = isTopUpTransaction
     ? [{ accountId: sourceAccountId, amount: -cost }, { accountId: destinationAccountId, amount: sellRaw }]
     : isCashWithdraw
       ? [{ accountId: sourceAccountId, amount: -cost }, { accountId: destinationAccountId, amount: moneyIn }]
+      : isCashDeposit
+        ? [{ accountId: sourceAccountId, amount: -cost }, { accountId: destinationAccountId, amount: moneyIn }]
       : isExpense
         ? [{ accountId: selectedAccountId, amount: -cost }]
         : [{ accountId: selectedAccountId, amount: -cost }, { accountId: selectedAccountId, amount: sellRaw }];
@@ -356,7 +360,7 @@ function getEditableSellValue(transaction) {
   if (transaction.type === "Tarik Tunai") {
     return transaction.fee || transaction.sell - transaction.cost;
   }
-  if (transaction.type === "Belanja Kebutuhan" || transaction.expense) {
+  if (transaction.type === "Belanja Kebutuhan" || transaction.type === "Setor Tunai" || transaction.expense) {
     return "";
   }
   return transaction.sell;
@@ -377,13 +381,14 @@ function updateTransactionFormLabels() {
   const isCashWithdraw = el.typeInput.value === "Tarik Tunai";
   const isTopUpTransaction = isTopUp(el.typeInput.value);
   const isExpense = el.typeInput.value === "Belanja Kebutuhan";
-  el.costField.textContent = isExpense ? "Nominal Belanja" : isCashWithdraw ? "Nominal Tarik Tunai (keluar Cash)" : isTopUpTransaction ? "Modal (keluar bank)" : "Modal / Nominal Keluar";
-  el.sellField.textContent = isExpense ? "Uang Masuk" : isCashWithdraw ? "Fee" : isTopUpTransaction ? "Harga Jual (masuk Cash)" : "Harga Jual / Fee";
-  el.accountFieldLabel.textContent = isTopUpTransaction ? "Akun Bank Sumber" : isCashWithdraw ? "Akun Bank Tujuan" : "Akun";
+  const isCashDeposit = el.typeInput.value === "Setor Tunai";
+  el.costField.textContent = isExpense ? "Nominal Belanja" : isCashWithdraw ? "Nominal Tarik Tunai (keluar Cash)" : isCashDeposit ? "Nominal Setor Tunai (keluar Cash)" : isTopUpTransaction ? "Modal (keluar bank)" : "Modal / Nominal Keluar";
+  el.sellField.textContent = isExpense ? "Uang Masuk" : isCashWithdraw ? "Fee" : isCashDeposit ? "Uang Masuk Bank" : isTopUpTransaction ? "Harga Jual (masuk Cash)" : "Harga Jual / Fee";
+  el.accountFieldLabel.textContent = isTopUpTransaction ? "Akun Bank Sumber" : isCashWithdraw || isCashDeposit ? "Akun Bank Tujuan" : "Akun";
   el.sellInput.placeholder = isCashWithdraw ? "Contoh: 5000" : "0";
-  el.sellInput.disabled = isExpense;
-  el.sellInput.required = !isExpense;
-  if (isExpense) el.sellInput.value = "";
+  el.sellInput.disabled = isExpense || isCashDeposit;
+  el.sellInput.required = !isExpense && !isCashDeposit;
+  if (isExpense || isCashDeposit) el.sellInput.value = "";
   renderPreview();
 }
 
@@ -392,8 +397,9 @@ function renderPreview() {
   const sell = toNumber(el.sellInput.value);
   const isCashWithdraw = el.typeInput.value === "Tarik Tunai";
   const isExpense = el.typeInput.value === "Belanja Kebutuhan";
-  el.previewIn.textContent = money(isExpense ? 0 : isCashWithdraw ? cost + sell : sell);
-  el.previewProfit.textContent = money(isExpense ? -cost : isCashWithdraw ? sell : sell - cost);
+  const isCashDeposit = el.typeInput.value === "Setor Tunai";
+  el.previewIn.textContent = money(isExpense ? 0 : isCashWithdraw ? cost + sell : isCashDeposit ? cost : sell);
+  el.previewProfit.textContent = money(isExpense || isCashDeposit ? 0 : isCashWithdraw ? sell : sell - cost);
 }
 
 function render() {
@@ -589,7 +595,8 @@ function getQuickActionIcon(type) {
     "Top Up OVO": { label: "OVO", className: "logo-ovo" },
     "Paket Data": { label: "DATA", className: "logo-data" },
     "Tarik Tunai": { label: "CASH", className: "logo-cash" },
-    "Belanja Kebutuhan": { label: "BELANJA", className: "logo-expense" }
+    "Belanja Kebutuhan": { label: "BELANJA", className: "logo-expense" },
+    "Setor Tunai": { label: "SETOR", className: "logo-cash" }
   };
   return icons[type] || { label: "", className: "" };
 }
@@ -657,8 +664,8 @@ function getProfit(transaction) {
   if (transaction.type === "Tarik Tunai") {
     return transaction.fee ?? transaction.sell - transaction.cost;
   }
-  if (transaction.type === "Belanja Kebutuhan" || transaction.expense) {
-    return -transaction.cost;
+  if (transaction.type === "Belanja Kebutuhan" || transaction.type === "Setor Tunai" || transaction.expense) {
+    return 0;
   }
   return transaction.sell - transaction.cost;
 }

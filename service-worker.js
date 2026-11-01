@@ -1,4 +1,4 @@
-const CACHE_NAME = "gigaphone-finance-v11-click-balance";
+const CACHE_NAME = "gigaphone-finance-v12-cash-deposit-profit";
 const ASSETS = [
   "./",
   "./index.html",
