@@ -1,0 +1,19 @@
+{
+  "name": "GigaPhone Finance",
+  "short_name": "GigaPhone",
+  "description": "Aplikasi pencatatan transaksi counter HP berbasis localStorage.",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#f3f7fc",
+  "theme_color": "#0b65d8",
+  "orientation": "portrait-primary",
+  "icons": [
+    {
+      "src": "icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}
