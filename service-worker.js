@@ -1,11 +1,17 @@
-const CACHE_NAME = "gigaphone-finance-v9-ledger";
+const CACHE_NAME = "gigaphone-finance-v10-bank-logos";
 const ASSETS = [
   "./",
   "./index.html",
   "./style.css",
   "./app.js",
   "./manifest.json",
-  "./icon-192.png"
+  "./icon-192.png",
+  "./assets/account-logos/cash.svg",
+  "./assets/account-logos/seabank.svg",
+  "./assets/account-logos/bri.svg",
+  "./assets/account-logos/mandiri.svg",
+  "./assets/account-logos/bca.svg",
+  "./assets/account-logos/default.svg"
 ];
 
 self.addEventListener("install", (event) => {

@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 160 48" role="img" aria-label="Akun">
+  <rect x="1" y="1" width="158" height="46" rx="12" fill="#edf4ff" stroke="#c6d9f4" stroke-width="2"/>
+  <circle cx="25" cy="24" r="13" fill="#0b65d8"/>
+  <path d="M19 24h12M25 18v12" stroke="#fff" stroke-width="2.5" stroke-linecap="round"/>
+  <text x="49" y="30" fill="#063a88" font-family="Arial,sans-serif" font-size="15" font-weight="750">AKUN</text>
+</svg>

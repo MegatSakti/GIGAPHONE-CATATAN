@@ -368,7 +368,7 @@ function renderDashboard() {
 
   el.dashboardAccounts.innerHTML = balances.map((account) => `
     <article class="account-card" title="${account.name}" aria-label="${account.name}">
-      <span class="account-logo ${getAccountLogo(account.id).className}" aria-hidden="true">${getAccountLogo(account.id).label}</span>
+      <img class="account-logo" src="${getAccountLogo(account.id)}" alt="" aria-hidden="true" width="160" height="48">
       <strong>${money(account.balance)}</strong>
       <small>${account.usesDailyBalance ? "Awal hari ini" : "Awal"} ${money(account.startingBalance)}</small>
     </article>
@@ -543,13 +543,13 @@ function getQuickActionIcon(type) {
 
 function getAccountLogo(accountId) {
   const logos = {
-    cash: { label: "CASH", className: "account-cash" },
-    seabank: { label: "SeaBank", className: "account-seabank" },
-    bri: { label: "BRI", className: "account-bri" },
-    mandiri: { label: "MANDIRI", className: "account-mandiri" },
-    bca: { label: "BCA", className: "account-bca" }
+    cash: "cash",
+    seabank: "seabank",
+    bri: "bri",
+    mandiri: "mandiri",
+    bca: "bca"
   };
-  return logos[accountId] || { label: accountId, className: "account-default" };
+  return `assets/account-logos/${logos[accountId] || "default"}.svg`;
 }
 
 function getAccountSummaries() {
