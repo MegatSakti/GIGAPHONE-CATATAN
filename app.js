@@ -183,8 +183,12 @@ function bindEvents() {
   el.dailyBalanceDate.addEventListener("change", renderDailyBalanceInputs);
   el.cancelEditButton.addEventListener("click", resetForm);
   el.typeInput.addEventListener("change", updateTransactionFormLabels);
-  el.costInput.addEventListener("input", renderPreview);
-  el.sellInput.addEventListener("input", renderPreview);
+  [el.costInput, el.sellInput].forEach((input) => {
+    input.addEventListener("input", () => {
+      formatAmountInput(input);
+      renderPreview();
+    });
+  });
 
   [el.searchInput, el.historyTypeFilter, el.historyAccountFilter, el.historyDateFilter].forEach((input) => {
     input.addEventListener("input", renderHistory);
@@ -226,8 +230,8 @@ function saveTransaction(event) {
   event.preventDefault();
 
   const type = el.typeInput.value;
-  const cost = toNumber(el.costInput.value);
-  const sellRaw = toNumber(el.sellInput.value);
+  const cost = parseAmount(el.costInput.value);
+  const sellRaw = parseAmount(el.sellInput.value);
   const isTopUpTransaction = isTopUp(type);
   const isCashWithdraw = type === "Tarik Tunai";
   const isExpense = type === "Belanja Kebutuhan";
@@ -346,8 +350,8 @@ function editTransaction(transaction) {
   el.typeInput.value = transaction.type;
   el.dateInput.value = transaction.date;
   el.descriptionInput.value = transaction.description || "";
-  el.costInput.value = transaction.cost;
-  el.sellInput.value = getEditableSellValue(transaction);
+  el.costInput.value = formatAmount(transaction.cost);
+  el.sellInput.value = formatAmount(getEditableSellValue(transaction));
   el.accountInput.value = transaction.accountId;
   el.formTitle.textContent = "Edit Transaksi";
   el.saveButton.textContent = "Simpan Perubahan";
@@ -393,8 +397,8 @@ function updateTransactionFormLabels() {
 }
 
 function renderPreview() {
-  const cost = toNumber(el.costInput.value);
-  const sell = toNumber(el.sellInput.value);
+  const cost = parseAmount(el.costInput.value);
+  const sell = parseAmount(el.sellInput.value);
   const isCashWithdraw = el.typeInput.value === "Tarik Tunai";
   const isExpense = el.typeInput.value === "Belanja Kebutuhan";
   const isCashDeposit = el.typeInput.value === "Setor Tunai";
@@ -811,6 +815,30 @@ function optionTag(value) {
 
 function toNumber(value) {
   return Number(value || 0);
+}
+
+function parseAmount(value) {
+  return Number(String(value || "").replace(/\D/g, "") || 0);
+}
+
+function formatAmount(value) {
+  const digits = String(value ?? "").replace(/\D/g, "").replace(/^0+(?=\d)/, "");
+  return digits.replace(/\B(?=(\d{3})+(?!\d))/g, ".");
+}
+
+function formatAmountInput(input) {
+  const cursor = input.selectionStart ?? input.value.length;
+  const digitsBeforeCursor = input.value.slice(0, cursor).replace(/\D/g, "").length;
+  const formatted = formatAmount(input.value);
+  input.value = formatted;
+
+  let nextCursor = 0;
+  let digitsSeen = 0;
+  while (nextCursor < formatted.length && digitsSeen < digitsBeforeCursor) {
+    if (/\d/.test(formatted[nextCursor])) digitsSeen += 1;
+    nextCursor += 1;
+  }
+  input.setSelectionRange(nextCursor, nextCursor);
 }
 
 function money(value) {
