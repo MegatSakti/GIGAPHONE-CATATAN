@@ -56,6 +56,11 @@
         </div>
         <div class="account-grid" id="dashboardAccounts"></div>
 
+        <div class="panel dashboard-note-panel">
+          <h2>Catatan Dashboard</h2>
+          <p id="dashboardNote" class="dashboard-note">Belum ada catatan.</p>
+        </div>
+
         <h2>Quick Action</h2>
         <div class="quick-actions" id="quickActions"></div>
 
@@ -64,6 +69,33 @@
           <button class="text-button" type="button" data-nav="history">Lihat Semua</button>
         </div>
         <div class="list" id="recentTransactions"></div>
+      </section>
+
+      <section class="page" id="page-hp-service" data-title="HP & Service">
+        <div class="section-title">
+          <h2>Saldo Bank Mandiri</h2>
+        </div>
+        <div class="account-grid" id="mandiriAccount"></div>
+
+        <div class="panel">
+          <h2>Transaksi HP & Service</h2>
+          <div class="quick-actions hp-service-actions" id="hpServiceActions">
+            <button type="button" data-type="Jual Beli HP">
+              <span class="quick-logo logo-phone" aria-hidden="true">JUAL HP</span>
+              <span>Jual Beli HP</span>
+            </button>
+            <button type="button" data-type="Service HP">
+              <span class="quick-logo logo-phone" aria-hidden="true">SERVICE</span>
+              <span>Service HP</span>
+            </button>
+          </div>
+          <div class="list" id="hpServiceTransactions"></div>
+        </div>
+
+        <div class="panel">
+          <h2>Mutasi Bank Mandiri</h2>
+          <div class="list" id="mandiriTransactions"></div>
+        </div>
       </section>
 
       <section class="page" id="page-transaction" data-title="Transaksi">
@@ -169,6 +201,17 @@
 
       <section class="page" id="page-settings" data-title="Pengaturan">
         <div class="panel">
+          <h2>Catatan Dashboard</h2>
+          <form id="dashboardNoteForm">
+            <label>
+              <span>Catatan yang ditampilkan di Dashboard</span>
+              <textarea id="dashboardNoteInput" rows="4" placeholder="Tulis catatan penting untuk ditampilkan di Dashboard..."></textarea>
+            </label>
+            <button class="primary-button" type="submit">Simpan Catatan</button>
+          </form>
+        </div>
+
+        <div class="panel">
           <h2>Saldo Awal Harian</h2>
           <form id="dailyBalanceForm" class="daily-balance-form">
             <label>
@@ -200,6 +243,7 @@
 
     <nav class="bottom-nav" aria-label="Navigasi utama">
       <button class="active" type="button" data-nav="dashboard">Dashboard</button>
+      <button type="button" data-nav="hp-service">HP &amp;<br>Service</button>
       <button type="button" data-nav="transaction">Transaksi</button>
       <button type="button" data-nav="history">Riwayat</button>
       <button type="button" data-nav="report">Laporan</button>
@@ -227,6 +271,6 @@
     <div class="empty-state">Belum ada data.</div>
   </template>
 
-  <script src="app.js?v=20261101-amount-format"></script>
+  <script src="app.js?v=20261103-finalize"></script>
 </body>
 </html>

@@ -172,6 +172,18 @@ h2 {
   color: var(--muted);
 }
 
+.dashboard-note-panel {
+  margin-top: 12px;
+}
+
+.dashboard-note {
+  margin: 0;
+  color: var(--muted);
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+
 .account-logo {
   display: block;
   width: min(100%, 112px);
@@ -434,7 +446,8 @@ label {
 }
 
 input,
-select {
+select,
+textarea {
   width: 100%;
   min-height: 48px;
   border: 1px solid var(--line);
@@ -445,8 +458,15 @@ select {
   outline: 0;
 }
 
+textarea {
+  min-height: 104px;
+  padding-block: 12px;
+  resize: vertical;
+}
+
 input:focus,
-select:focus {
+select:focus,
+textarea:focus {
   border-color: var(--blue-600);
   box-shadow: 0 0 0 4px rgba(20, 120, 239, 0.12);
 }
@@ -498,7 +518,7 @@ select:focus {
   z-index: 10;
   display: grid;
   width: min(100%, 1080px);
-  grid-template-columns: repeat(5, 1fr);
+  grid-template-columns: repeat(6, minmax(0, 1fr));
   transform: translateX(-50%);
   padding: 8px 8px calc(8px + env(safe-area-inset-bottom));
   border-top: 1px solid var(--line);
@@ -507,13 +527,16 @@ select:focus {
 }
 
 .bottom-nav button {
+  min-width: 0;
   min-height: 48px;
   border: 0;
   border-radius: 14px;
   background: transparent;
   color: var(--muted);
-  font-size: clamp(0.68rem, 2.7vw, 0.82rem);
+  padding: 4px 2px;
+  font-size: clamp(0.55rem, 2.3vw, 0.78rem);
   font-weight: 750;
+  line-height: 1.1;
 }
 
 .bottom-nav button.active {

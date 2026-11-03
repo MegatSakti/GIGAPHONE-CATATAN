@@ -1,6 +1,8 @@
 const STORAGE_KEY = "gigaphone-finance-v1";
 
 const TRANSACTION_TYPES = [
+  "Jual Beli HP",
+  "Service HP",
   "Service / JB HP",
   "Top Up DANA",
   "Top Up GoPay",
@@ -10,6 +12,8 @@ const TRANSACTION_TYPES = [
   "Belanja Kebutuhan",
   "Setor Tunai"
 ];
+
+const QUICK_ACTION_TYPES = TRANSACTION_TYPES.filter((type) => type !== "Service / JB HP");
 
 const ACCOUNT_DEFAULTS = [
   { id: "cash", name: "Cash", openingBalance: 0 },
@@ -41,7 +45,14 @@ const el = {
   balanceValueInput: document.querySelector("#balanceValueInput"),
   cancelBalanceUpdate: document.querySelector("#cancelBalanceUpdate"),
   dailyBalanceShortcut: document.querySelector("#dailyBalanceShortcut"),
+  dashboardNote: document.querySelector("#dashboardNote"),
+  dashboardNoteForm: document.querySelector("#dashboardNoteForm"),
+  dashboardNoteInput: document.querySelector("#dashboardNoteInput"),
   quickActions: document.querySelector("#quickActions"),
+  hpServiceActions: document.querySelector("#hpServiceActions"),
+  hpServiceTransactions: document.querySelector("#hpServiceTransactions"),
+  mandiriAccount: document.querySelector("#mandiriAccount"),
+  mandiriTransactions: document.querySelector("#mandiriTransactions"),
   recentTransactions: document.querySelector("#recentTransactions"),
   transactionForm: document.querySelector("#transactionForm"),
   transactionId: document.querySelector("#transactionId"),
@@ -98,16 +109,19 @@ function loadState() {
   const fallback = {
     accounts: ACCOUNT_DEFAULTS,
     transactions: [],
-    dailyBalances: {}
+    dailyBalances: {},
+    dashboardNote: ""
   };
 
   try {
     const stored = JSON.parse(localStorage.getItem(STORAGE_KEY));
     if (!stored || !Array.isArray(stored.transactions)) return fallback;
     return {
+      ...stored,
       accounts: Array.isArray(stored.accounts) ? stored.accounts : ACCOUNT_DEFAULTS,
       transactions: stored.transactions,
-      dailyBalances: stored.dailyBalances || {}
+      dailyBalances: stored.dailyBalances || {},
+      dashboardNote: typeof stored.dashboardNote === "string" ? stored.dashboardNote : ""
     };
   } catch {
     return fallback;
@@ -161,17 +175,18 @@ function bindEvents() {
     button.addEventListener("click", () => navigate(button.dataset.nav));
   });
 
-  el.quickActions.addEventListener("click", (event) => {
+  [el.quickActions, el.hpServiceActions].forEach((container) => container.addEventListener("click", (event) => {
     const button = event.target.closest("button[data-type]");
     if (!button) return;
     resetForm();
     el.typeInput.value = button.dataset.type;
     updateTransactionFormLabels();
     navigate("transaction");
-  });
+  }));
 
   el.transactionForm.addEventListener("submit", saveTransaction);
   el.dashboardAccounts.addEventListener("click", openAccountBalanceDialog);
+  el.mandiriAccount.addEventListener("click", openAccountBalanceDialog);
   el.accountBalanceForm.addEventListener("submit", saveAccountBalance);
   el.cancelBalanceUpdate.addEventListener("click", () => el.accountBalanceDialog.close());
   el.dailyBalanceShortcut.addEventListener("click", () => {
@@ -180,6 +195,7 @@ function bindEvents() {
     el.dailyBalanceDate.scrollIntoView({ behavior: "smooth", block: "center" });
   });
   el.dailyBalanceForm.addEventListener("submit", saveDailyBalances);
+  el.dashboardNoteForm.addEventListener("submit", saveDashboardNote);
   el.dailyBalanceDate.addEventListener("change", renderDailyBalanceInputs);
   el.cancelEditButton.addEventListener("click", resetForm);
   el.typeInput.addEventListener("change", updateTransactionFormLabels);
@@ -195,6 +211,8 @@ function bindEvents() {
   });
 
   el.historyList.addEventListener("click", handleHistoryAction);
+  el.hpServiceTransactions.addEventListener("click", handleHistoryAction);
+  el.mandiriTransactions.addEventListener("click", handleHistoryAction);
   el.exportButton.addEventListener("click", exportBackup);
   el.importInput.addEventListener("change", importBackup);
 
@@ -410,6 +428,7 @@ function render() {
   el.dateInput.value ||= todayISO();
   el.dailyBalanceDate.value ||= todayISO();
   renderDashboard();
+  renderHpService();
   renderHistory();
   renderReports();
   renderSettings();
@@ -418,7 +437,7 @@ function render() {
 }
 
 function renderDashboard() {
-  const balances = getDashboardAccountSummaries();
+  const balances = getDashboardAccountSummaries().filter((account) => account.id !== "mandiri");
   const todayTransactions = filterByToday(state.transactions);
   const monthTransactions = filterByCurrentMonth(state.transactions);
 
@@ -437,13 +456,41 @@ function renderDashboard() {
     </article>
   `).join("");
 
-  el.quickActions.innerHTML = TRANSACTION_TYPES.map((type) => `
+  el.dashboardNote.textContent = state.dashboardNote || "Belum ada catatan.";
+
+  el.quickActions.innerHTML = QUICK_ACTION_TYPES.map((type) => `
     <button type="button" data-type="${type}" aria-label="${type}" title="${type}">
       <span class="quick-logo ${getQuickActionIcon(type).className}" aria-hidden="true">${getQuickActionIcon(type).label}</span>
+      <span>${type}</span>
     </button>
   `).join("");
 
   renderTransactionList(el.recentTransactions, getSortedTransactions().slice(0, 5), { compact: true });
+}
+
+function renderHpService() {
+  const mandiri = getDashboardAccountSummaries().find((account) => account.id === "mandiri");
+  if (mandiri) {
+    el.mandiriAccount.innerHTML = `
+      <article class="account-card" title="${mandiri.name}" aria-label="${mandiri.name}">
+        <button class="account-logo-button" type="button" data-update-account="${mandiri.id}" aria-label="Update saldo ${mandiri.name}" title="Klik logo untuk update saldo" aria-haspopup="dialog">
+          <img class="account-logo" src="${getAccountLogo(mandiri.id)}" alt="" aria-hidden="true" width="160" height="48">
+        </button>
+        <strong>${money(mandiri.balance)}</strong>
+        <small>${mandiri.usesDailyBalance ? "Awal hari ini" : "Awal"} ${money(mandiri.startingBalance)}</small>
+      </article>
+    `;
+  } else {
+    el.mandiriAccount.replaceChildren();
+  }
+
+  const hpServiceTypes = new Set(["Jual Beli HP", "Service HP", "Service / JB HP"]);
+  const hpServiceTransactions = getSortedTransactions().filter((transaction) => hpServiceTypes.has(transaction.type));
+  const mandiriTransactions = getSortedTransactions().filter((transaction) =>
+    getTransactionMovements(transaction).some((movement) => movement.accountId === "mandiri")
+  );
+  renderTransactionList(el.hpServiceTransactions, hpServiceTransactions, { actions: true });
+  renderTransactionList(el.mandiriTransactions, mandiriTransactions, { actions: true });
 }
 
 function renderHistory() {
@@ -485,6 +532,7 @@ function renderReports() {
 }
 
 function renderSettings() {
+  el.dashboardNoteInput.value = state.dashboardNote || "";
   el.settingsAccounts.innerHTML = getAccountSummaries().map((account) => `
     <article class="breakdown-item">
       <div class="breakdown-row">
@@ -530,6 +578,13 @@ function saveDailyBalances(event) {
   saveState();
   render();
   alert("Saldo awal harian berhasil disimpan.");
+}
+
+function saveDashboardNote(event) {
+  event.preventDefault();
+  state.dashboardNote = el.dashboardNoteInput.value;
+  saveState();
+  renderDashboard();
 }
 
 function renderTransactionList(container, transactions, options = {}) {
@@ -594,6 +649,8 @@ function breakdownItem(title, count, metricValue, totalIn, totalOut, metricLabel
 function getQuickActionIcon(type) {
   const icons = {
     "Service / JB HP": { label: "HP", className: "logo-phone" },
+    "Jual Beli HP": { label: "JUAL HP", className: "logo-phone" },
+    "Service HP": { label: "SERVICE", className: "logo-phone" },
     "Top Up DANA": { label: "DANA", className: "logo-dana" },
     "Top Up GoPay": { label: "GoPay", className: "logo-gopay" },
     "Top Up OVO": { label: "OVO", className: "logo-ovo" },
@@ -794,9 +851,11 @@ async function importBackup(event) {
     }
 
     state = {
+      ...imported,
       accounts: imported.accounts,
       transactions: imported.transactions,
-      dailyBalances: imported.dailyBalances || {}
+      dailyBalances: imported.dailyBalances || {},
+      dashboardNote: typeof imported.dashboardNote === "string" ? imported.dashboardNote : ""
     };
     ensureAccountDefaults();
     saveState();
