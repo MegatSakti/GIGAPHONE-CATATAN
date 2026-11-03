@@ -26,6 +26,14 @@
 
     <main>
       <section class="page active" id="page-dashboard" data-title="Dashboard">
+        <div class="dashboard-note-card" aria-label="Catatan Dashboard">
+          <span class="dashboard-note-icon" aria-hidden="true">✦</span>
+          <div class="dashboard-note-content">
+            <span class="dashboard-note-label">Catatan hari ini</span>
+            <p id="dashboardNote" class="dashboard-note">Belum ada catatan.</p>
+          </div>
+        </div>
+
         <div class="hero-card">
           <div>
             <p class="muted">Total Saldo</p>
@@ -55,11 +63,6 @@
           </button>
         </div>
         <div class="account-grid" id="dashboardAccounts"></div>
-
-        <div class="panel dashboard-note-panel">
-          <h2>Catatan Dashboard</h2>
-          <p id="dashboardNote" class="dashboard-note">Belum ada catatan.</p>
-        </div>
 
         <h2>Quick Action</h2>
         <div class="quick-actions" id="quickActions"></div>

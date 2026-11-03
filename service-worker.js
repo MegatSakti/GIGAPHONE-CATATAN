@@ -1,4 +1,4 @@
-const CACHE_NAME = "gigaphone-finance-v15-dashboard-hp-service";
+const CACHE_NAME = "gigaphone-finance-v16-dashboard-note-top";
 const ASSETS = [
   "./",
   "./index.html",
