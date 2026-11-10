@@ -4,6 +4,7 @@ const TRANSACTION_TYPES = [
   "Jual Beli HP",
   "Service HP",
   "Service / JB HP",
+  "Gadai HP",
   "Top Up DANA",
   "Top Up GoPay",
   "Top Up OVO",
@@ -14,6 +15,7 @@ const TRANSACTION_TYPES = [
 ];
 
 const QUICK_ACTION_TYPES = TRANSACTION_TYPES.filter((type) => type !== "Service / JB HP");
+const HP_SERVICE_TYPES = new Set(["Jual Beli HP", "Service HP", "Service / JB HP"]);
 
 const ACCOUNT_DEFAULTS = [
   { id: "cash", name: "Cash", openingBalance: 0 },
@@ -37,6 +39,7 @@ const el = {
   todayProfit: document.querySelector("#todayProfit"),
   todayCount: document.querySelector("#todayCount"),
   monthProfit: document.querySelector("#monthProfit"),
+  pawnTotal: document.querySelector("#pawnTotal"),
   dashboardAccounts: document.querySelector("#dashboardAccounts"),
   accountBalanceDialog: document.querySelector("#accountBalanceDialog"),
   accountBalanceForm: document.querySelector("#accountBalanceForm"),
@@ -51,6 +54,8 @@ const el = {
   quickActions: document.querySelector("#quickActions"),
   hpServiceActions: document.querySelector("#hpServiceActions"),
   hpServiceTransactions: document.querySelector("#hpServiceTransactions"),
+  hpServiceTodayProfit: document.querySelector("#hpServiceTodayProfit"),
+  hpServiceTotalProfit: document.querySelector("#hpServiceTotalProfit"),
   mandiriAccount: document.querySelector("#mandiriAccount"),
   mandiriTransactions: document.querySelector("#mandiriTransactions"),
   recentTransactions: document.querySelector("#recentTransactions"),
@@ -158,6 +163,11 @@ function refreshAccountSelects() {
 function updateTransactionAccountOptions() {
   const selected = el.accountInput.value;
   const type = el.typeInput.value;
+  if (isHpServiceType(type)) {
+    const mandiri = state.accounts.find((account) => account.id === "mandiri");
+    el.accountInput.innerHTML = mandiri ? `<option value="${mandiri.id}">${mandiri.name}</option>` : "";
+    return;
+  }
   const bankOnly = isTopUp(type) || type === "Tarik Tunai" || type === "Setor Tunai";
   const accounts = bankOnly ? state.accounts.filter((account) => account.id !== "cash") : state.accounts;
   el.accountInput.innerHTML = accounts.map((account) => `<option value="${account.id}">${account.name}</option>`).join("");
@@ -168,6 +178,10 @@ function updateTransactionAccountOptions() {
 
 function isTopUp(type) {
   return ["Top Up DANA", "Top Up GoPay", "Top Up OVO", "Paket Data"].includes(type);
+}
+
+function isHpServiceType(type) {
+  return HP_SERVICE_TYPES.has(type);
 }
 
 function bindEvents() {
@@ -254,8 +268,9 @@ function saveTransaction(event) {
   const isCashWithdraw = type === "Tarik Tunai";
   const isExpense = type === "Belanja Kebutuhan";
   const isCashDeposit = type === "Setor Tunai";
-  const moneyIn = isExpense ? 0 : isCashWithdraw ? cost + sellRaw : isCashDeposit ? cost : sellRaw;
-  const selectedAccountId = el.accountInput.value;
+  const isPawn = type === "Gadai HP";
+  const moneyIn = isExpense || isPawn ? 0 : isCashWithdraw ? cost + sellRaw : isCashDeposit ? cost : sellRaw;
+  const selectedAccountId = isHpServiceType(type) ? "mandiri" : el.accountInput.value;
   const cashId = state.accounts.find((account) => account.id === "cash")?.id || "cash";
   const sourceAccountId = isTopUpTransaction ? selectedAccountId : isCashWithdraw || isCashDeposit ? cashId : selectedAccountId;
   const destinationAccountId = isTopUpTransaction ? cashId : selectedAccountId;
@@ -265,7 +280,7 @@ function saveTransaction(event) {
       ? [{ accountId: sourceAccountId, amount: -cost }, { accountId: destinationAccountId, amount: moneyIn }]
       : isCashDeposit
         ? [{ accountId: sourceAccountId, amount: -cost }, { accountId: destinationAccountId, amount: moneyIn }]
-      : isExpense
+      : isExpense || isPawn
         ? [{ accountId: selectedAccountId, amount: -cost }]
         : [{ accountId: selectedAccountId, amount: -cost }, { accountId: selectedAccountId, amount: sellRaw }];
 
@@ -404,13 +419,14 @@ function updateTransactionFormLabels() {
   const isTopUpTransaction = isTopUp(el.typeInput.value);
   const isExpense = el.typeInput.value === "Belanja Kebutuhan";
   const isCashDeposit = el.typeInput.value === "Setor Tunai";
-  el.costField.textContent = isExpense ? "Nominal Belanja" : isCashWithdraw ? "Nominal Tarik Tunai (keluar Cash)" : isCashDeposit ? "Nominal Setor Tunai (keluar Cash)" : isTopUpTransaction ? "Modal (keluar bank)" : "Modal / Nominal Keluar";
-  el.sellField.textContent = isExpense ? "Uang Masuk" : isCashWithdraw ? "Fee" : isCashDeposit ? "Uang Masuk Bank" : isTopUpTransaction ? "Harga Jual (masuk Cash)" : "Harga Jual / Fee";
-  el.accountFieldLabel.textContent = isTopUpTransaction ? "Akun Bank Sumber" : isCashWithdraw || isCashDeposit ? "Akun Bank Tujuan" : "Akun";
+  const isPawn = el.typeInput.value === "Gadai HP";
+  el.costField.textContent = isPawn ? "Nominal Gadai" : isExpense ? "Nominal Belanja" : isCashWithdraw ? "Nominal Tarik Tunai (keluar Cash)" : isCashDeposit ? "Nominal Setor Tunai (keluar Cash)" : isTopUpTransaction ? "Modal (keluar bank)" : "Modal / Nominal Keluar";
+  el.sellField.textContent = isPawn ? "Profit Gadai HP (Rp0)" : isExpense ? "Uang Masuk" : isCashWithdraw ? "Fee" : isCashDeposit ? "Uang Masuk Bank" : isTopUpTransaction ? "Harga Jual (masuk Cash)" : "Harga Jual / Fee";
+  el.accountFieldLabel.textContent = isHpServiceType(el.typeInput.value) ? "Akun Bank Mandiri" : isTopUpTransaction ? "Akun Bank Sumber" : isCashWithdraw || isCashDeposit ? "Akun Bank Tujuan" : "Akun";
   el.sellInput.placeholder = isCashWithdraw ? "Contoh: 5000" : "0";
-  el.sellInput.disabled = isExpense || isCashDeposit;
-  el.sellInput.required = !isExpense && !isCashDeposit;
-  if (isExpense || isCashDeposit) el.sellInput.value = "";
+  el.sellInput.disabled = isExpense || isCashDeposit || isPawn;
+  el.sellInput.required = !isExpense && !isCashDeposit && !isPawn;
+  if (isExpense || isCashDeposit || isPawn) el.sellInput.value = "";
   renderPreview();
 }
 
@@ -420,8 +436,9 @@ function renderPreview() {
   const isCashWithdraw = el.typeInput.value === "Tarik Tunai";
   const isExpense = el.typeInput.value === "Belanja Kebutuhan";
   const isCashDeposit = el.typeInput.value === "Setor Tunai";
-  el.previewIn.textContent = money(isExpense ? 0 : isCashWithdraw ? cost + sell : isCashDeposit ? cost : sell);
-  el.previewProfit.textContent = money(isExpense || isCashDeposit ? 0 : isCashWithdraw ? sell : sell - cost);
+  const isPawn = el.typeInput.value === "Gadai HP";
+  el.previewIn.textContent = money(isExpense || isPawn ? 0 : isCashWithdraw ? cost + sell : isCashDeposit ? cost : sell);
+  el.previewProfit.textContent = money(isExpense || isCashDeposit || isPawn ? 0 : isCashWithdraw ? sell : sell - cost);
 }
 
 function render() {
@@ -442,9 +459,10 @@ function renderDashboard() {
   const monthTransactions = filterByCurrentMonth(state.transactions);
 
   el.totalBalance.textContent = money(balances.reduce((sum, account) => sum + account.balance, 0));
-  el.todayProfit.textContent = money(sumProfit(todayTransactions));
+  el.todayProfit.textContent = money(sumDashboardProfit(todayTransactions));
   el.todayCount.textContent = todayTransactions.length;
-  el.monthProfit.textContent = money(sumProfit(monthTransactions));
+  el.monthProfit.textContent = money(sumDashboardProfit(monthTransactions));
+  el.pawnTotal.textContent = money(sumPawnNominal(state.transactions));
 
   el.dashboardAccounts.innerHTML = balances.map((account) => `
     <article class="account-card" title="${account.name}" aria-label="${account.name}">
@@ -465,7 +483,7 @@ function renderDashboard() {
     </button>
   `).join("");
 
-  renderTransactionList(el.recentTransactions, getSortedTransactions().slice(0, 5), { compact: true });
+  renderTransactionList(el.recentTransactions, getSortedTransactions().slice(0, 5), { compact: true, hideHpServiceProfit: true });
 }
 
 function renderHpService() {
@@ -484,8 +502,14 @@ function renderHpService() {
     el.mandiriAccount.replaceChildren();
   }
 
-  const hpServiceTypes = new Set(["Jual Beli HP", "Service HP", "Service / JB HP"]);
-  const hpServiceTransactions = getSortedTransactions().filter((transaction) => hpServiceTypes.has(transaction.type));
+  const hpServiceTransactions = getSortedTransactions().filter((transaction) => isHpServiceType(transaction.type));
+  const todayHpServiceTransactions = filterByToday(hpServiceTransactions);
+  const todayProfit = sumProfit(todayHpServiceTransactions);
+  const totalProfit = sumProfit(hpServiceTransactions);
+  el.hpServiceTodayProfit.textContent = money(todayProfit);
+  el.hpServiceTodayProfit.className = todayProfit < 0 ? "profit-negative" : "profit-positive";
+  el.hpServiceTotalProfit.textContent = money(totalProfit);
+  el.hpServiceTotalProfit.className = totalProfit < 0 ? "profit-negative" : "profit-positive";
   const mandiriTransactions = getSortedTransactions().filter((transaction) =>
     getTransactionMovements(transaction).some((movement) => movement.accountId === "mandiri")
   );
@@ -595,6 +619,7 @@ function renderTransactionList(container, transactions, options = {}) {
 
   container.innerHTML = transactions.map((transaction) => {
     const profit = getProfit(transaction);
+    const showProfit = !(options.hideHpServiceProfit && isHpServiceType(transaction.type));
     const detail = transaction.description || "-";
     const totals = getMovementTotals(transaction);
     return `
@@ -616,10 +641,10 @@ function renderTransactionList(container, transactions, options = {}) {
             <small>Masuk</small>
             <strong class="money-in">${money(totals.in)}</strong>
           </div>
-          <div>
+          ${showProfit ? `<div>
             <small>Profit</small>
             <strong class="${profit >= 0 ? "profit-positive" : "profit-negative"}">${money(profit)}</strong>
-          </div>
+          </div>` : ""}
         </div>
         ${options.actions ? `
           <div class="transaction-actions">
@@ -651,6 +676,7 @@ function getQuickActionIcon(type) {
     "Service / JB HP": { label: "HP", className: "logo-phone" },
     "Jual Beli HP": { label: "JUAL HP", className: "logo-phone" },
     "Service HP": { label: "SERVICE", className: "logo-phone" },
+    "Gadai HP": { label: "GADAI", className: "logo-pawn" },
     "Top Up DANA": { label: "DANA", className: "logo-dana" },
     "Top Up GoPay": { label: "GoPay", className: "logo-gopay" },
     "Top Up OVO": { label: "OVO", className: "logo-ovo" },
@@ -722,6 +748,7 @@ function getSortedTransactions() {
 }
 
 function getProfit(transaction) {
+  if (transaction.type === "Gadai HP") return 0;
   if (transaction.type === "Tarik Tunai") {
     return transaction.fee ?? transaction.sell - transaction.cost;
   }
@@ -733,6 +760,16 @@ function getProfit(transaction) {
 
 function sumProfit(transactions) {
   return transactions.reduce((sum, item) => sum + getProfit(item), 0);
+}
+
+function sumDashboardProfit(transactions) {
+  return sumProfit(transactions.filter((transaction) => !isHpServiceType(transaction.type) && transaction.type !== "Gadai HP"));
+}
+
+function sumPawnNominal(transactions) {
+  return transactions
+    .filter((transaction) => transaction.type === "Gadai HP")
+    .reduce((sum, transaction) => sum + (Number(transaction.cost) || 0), 0);
 }
 
 function sumIn(transactions) {
@@ -755,7 +792,7 @@ function getTransactionMovements(transaction) {
   if (!accountId) return [];
   const cost = Number(transaction.cost) || 0;
   const sell = Number(transaction.sell) || 0;
-  if (transaction.type === "Belanja Kebutuhan" || transaction.expense) {
+  if (transaction.type === "Belanja Kebutuhan" || transaction.type === "Gadai HP" || transaction.expense) {
     return [{ accountId, amount: -cost }];
   }
   return [{ accountId, amount: -cost }, { accountId, amount: sell }];

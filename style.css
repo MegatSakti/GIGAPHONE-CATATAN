@@ -325,6 +325,7 @@ h2 {
 .logo-data { background: #087d5b; }
 .logo-cash { background: #b86e00; }
 .logo-expense { background: #df2f47; font-size: 0.54rem; }
+.logo-pawn { background: #8a5a18; }
 
 .quick-actions button:active,
 .primary-button:active,
@@ -554,7 +555,7 @@ textarea:focus {
   z-index: 10;
   display: grid;
   width: min(100%, 1080px);
-  grid-template-columns: repeat(6, minmax(0, 1fr));
+  grid-template-columns: repeat(5, minmax(0, 1fr));
   transform: translateX(-50%);
   padding: 8px 8px calc(8px + env(safe-area-inset-bottom));
   border-top: 1px solid var(--line);

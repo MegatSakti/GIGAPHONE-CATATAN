@@ -54,6 +54,10 @@
             <span>Total Profit Bulan Ini</span>
             <strong id="monthProfit">Rp0</strong>
           </article>
+          <article class="stat-card">
+            <span>Total Nominal Gadai HP</span>
+            <strong id="pawnTotal">Rp0</strong>
+          </article>
         </div>
 
         <div class="section-title">
@@ -82,6 +86,16 @@
 
         <div class="panel">
           <h2>Transaksi HP & Service</h2>
+          <div class="stats-grid hp-service-stats">
+            <article class="stat-card">
+              <span>Profit HP Hari Ini</span>
+              <strong id="hpServiceTodayProfit">Rp0</strong>
+            </article>
+            <article class="stat-card">
+              <span>Total Profit HP & Service</span>
+              <strong id="hpServiceTotalProfit">Rp0</strong>
+            </article>
+          </div>
           <div class="quick-actions hp-service-actions" id="hpServiceActions">
             <button type="button" data-type="Jual Beli HP">
               <span class="quick-logo logo-phone" aria-hidden="true">JUAL HP</span>
@@ -247,7 +261,6 @@
     <nav class="bottom-nav" aria-label="Navigasi utama">
       <button class="active" type="button" data-nav="dashboard">Dashboard</button>
       <button type="button" data-nav="hp-service">HP &amp;<br>Service</button>
-      <button type="button" data-nav="transaction">Transaksi</button>
       <button type="button" data-nav="history">Riwayat</button>
       <button type="button" data-nav="report">Laporan</button>
       <button type="button" data-nav="settings">Pengaturan</button>
@@ -274,6 +287,6 @@
     <div class="empty-state">Belum ada data.</div>
   </template>
 
-  <script src="app.js?v=20261103-finalize"></script>
+  <script src="app.js?v=20261110-finalize"></script>
 </body>
 </html>
