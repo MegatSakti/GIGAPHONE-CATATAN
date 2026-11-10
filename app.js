@@ -2,6 +2,7 @@ const STORAGE_KEY = "gigaphone-finance-v1";
 const LAST_OBSERVED_DATE_KEY = "gigaphone-finance-last-observed-date";
 const DAILY_REMINDER_DATE_KEY = "gigaphone-finance-daily-reminder-date";
 const DISMISSED_DAILY_REMINDER_DATE_KEY = "gigaphone-finance-dismissed-daily-reminder-date";
+const DANA_ADMIN_FEE = 400;
 
 const TRANSACTION_TYPES = [
   "Jual Beli HP",
@@ -70,6 +71,7 @@ const el = {
   sellInput: document.querySelector("#sellInput"),
   accountInput: document.querySelector("#accountInput"),
   accountFieldLabel: document.querySelector("#accountField span"),
+  adminFeeNotice: document.querySelector("#adminFeeNotice"),
   costField: document.querySelector("#costField span"),
   sellField: document.querySelector("#sellField span"),
   previewIn: document.querySelector("#previewIn"),
@@ -174,6 +176,14 @@ function refreshAccountSelects() {
 function updateTransactionAccountOptions() {
   const selected = el.accountInput.value;
   const type = el.typeInput.value;
+  if (type === "Top Up DANA") {
+    const seabank = state.accounts.find((account) => account.id === "seabank");
+    el.accountInput.innerHTML = seabank ? `<option value="${seabank.id}">${seabank.name}</option>` : "";
+    el.accountInput.value = seabank?.id || "";
+    el.accountInput.disabled = true;
+    return;
+  }
+  el.accountInput.disabled = false;
   if (isHpServiceType(type)) {
     const mandiri = state.accounts.find((account) => account.id === "mandiri");
     el.accountInput.innerHTML = mandiri ? `<option value="${mandiri.id}">${mandiri.name}</option>` : "";
@@ -310,17 +320,18 @@ function saveTransaction(event) {
   const cost = parseAmount(el.costInput.value);
   const sellRaw = parseAmount(el.sellInput.value);
   const isTopUpTransaction = isTopUp(type);
+  const isDanaTopUp = type === "Top Up DANA";
   const isCashWithdraw = type === "Tarik Tunai";
   const isExpense = type === "Belanja Kebutuhan";
   const isCashDeposit = type === "Setor Tunai";
   const isPawn = type === "Gadai HP";
   const moneyIn = isExpense || isPawn ? 0 : isCashWithdraw ? cost + sellRaw : isCashDeposit ? cost : sellRaw;
-  const selectedAccountId = isHpServiceType(type) ? "mandiri" : el.accountInput.value;
+  const selectedAccountId = isDanaTopUp ? "seabank" : isHpServiceType(type) ? "mandiri" : el.accountInput.value;
   const cashId = state.accounts.find((account) => account.id === "cash")?.id || "cash";
   const sourceAccountId = isTopUpTransaction ? selectedAccountId : isCashWithdraw || isCashDeposit ? cashId : selectedAccountId;
   const destinationAccountId = isTopUpTransaction ? cashId : selectedAccountId;
   const movements = isTopUpTransaction
-    ? [{ accountId: sourceAccountId, amount: -cost }, { accountId: destinationAccountId, amount: sellRaw }]
+    ? [{ accountId: sourceAccountId, amount: -(cost + (isDanaTopUp ? DANA_ADMIN_FEE : 0)) }, { accountId: destinationAccountId, amount: sellRaw }]
     : isCashWithdraw
       ? [{ accountId: sourceAccountId, amount: -cost }, { accountId: destinationAccountId, amount: moneyIn }]
       : isCashDeposit
@@ -337,6 +348,7 @@ function saveTransaction(event) {
     cost,
     sell: moneyIn,
     fee: isCashWithdraw ? sellRaw : null,
+    ...(isDanaTopUp ? { adminFee: DANA_ADMIN_FEE } : {}),
     expense: isExpense,
     accountId: selectedAccountId,
     sourceAccountId,
@@ -462,12 +474,14 @@ function updateTransactionFormLabels() {
   updateTransactionAccountOptions();
   const isCashWithdraw = el.typeInput.value === "Tarik Tunai";
   const isTopUpTransaction = isTopUp(el.typeInput.value);
+  const isDanaTopUp = el.typeInput.value === "Top Up DANA";
   const isExpense = el.typeInput.value === "Belanja Kebutuhan";
   const isCashDeposit = el.typeInput.value === "Setor Tunai";
   const isPawn = el.typeInput.value === "Gadai HP";
   el.costField.textContent = isPawn ? "Nominal Gadai" : isExpense ? "Nominal Belanja" : isCashWithdraw ? "Nominal Tarik Tunai (keluar Cash)" : isCashDeposit ? "Nominal Setor Tunai (keluar Cash)" : isTopUpTransaction ? "Modal (keluar bank)" : "Modal / Nominal Keluar";
   el.sellField.textContent = isPawn ? "Profit Gadai HP (Rp0)" : isExpense ? "Uang Masuk" : isCashWithdraw ? "Fee" : isCashDeposit ? "Uang Masuk Bank" : isTopUpTransaction ? "Harga Jual (masuk Cash)" : "Harga Jual / Fee";
-  el.accountFieldLabel.textContent = isHpServiceType(el.typeInput.value) ? "Akun Bank Mandiri" : isTopUpTransaction ? "Akun Bank Sumber" : isCashWithdraw || isCashDeposit ? "Akun Bank Tujuan" : "Akun";
+  el.accountFieldLabel.textContent = isHpServiceType(el.typeInput.value) ? "Akun Bank Mandiri" : isDanaTopUp ? "Akun Sumber (SeaBank)" : isTopUpTransaction ? "Akun Bank Sumber" : isCashWithdraw || isCashDeposit ? "Akun Bank Tujuan" : "Akun";
+  el.adminFeeNotice.hidden = !isDanaTopUp;
   el.sellInput.placeholder = isCashWithdraw ? "Contoh: 5000" : "0";
   el.sellInput.disabled = isExpense || isCashDeposit || isPawn;
   el.sellInput.required = !isExpense && !isCashDeposit && !isPawn;

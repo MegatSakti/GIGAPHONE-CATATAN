@@ -1,9 +1,9 @@
-const CACHE_NAME = "gigaphone-finance-v18-daily-balance";
+const CACHE_NAME = "gigaphone-finance-v19-dana-admin-fee";
 const ASSETS = [
   "./",
   "./index.html",
   "./style.css",
-  "./app.js?v=20261110-release2",
+  "./app.js?v=20261110-release3",
   "./manifest.json",
   "./icon-192.png",
   "./assets/account-logos/cash.svg",
