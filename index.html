@@ -24,6 +24,14 @@
       </button>
     </header>
 
+    <aside class="daily-rollover-notice" id="dailyRolloverNotice" role="status" aria-live="polite" hidden>
+      <p>Hari baru dimulai. Saldo harian perlu diatur ulang karena tanggal sudah berganti.</p>
+      <div class="daily-rollover-actions">
+        <button class="daily-rollover-setup" id="dailyRolloverSetup" type="button">Atur</button>
+        <button class="daily-rollover-close" id="dailyRolloverClose" type="button" aria-label="Tutup notifikasi">&times;</button>
+      </div>
+    </aside>
+
     <main>
       <section class="page active" id="page-dashboard" data-title="Dashboard">
         <div class="dashboard-note-card" aria-label="Catatan Dashboard">
@@ -70,12 +78,6 @@
 
         <h2>Quick Action</h2>
         <div class="quick-actions" id="quickActions"></div>
-
-        <div class="section-title">
-          <h2>5 Transaksi Terbaru</h2>
-          <button class="text-button" type="button" data-nav="history">Lihat Semua</button>
-        </div>
-        <div class="list" id="recentTransactions"></div>
       </section>
 
       <section class="page" id="page-hp-service" data-title="HP & Service">
@@ -287,6 +289,6 @@
     <div class="empty-state">Belum ada data.</div>
   </template>
 
-  <script src="app.js?v=20261110-finalize"></script>
+  <script src="app.js?v=20261110-release2"></script>
 </body>
 </html>

@@ -1,4 +1,7 @@
 const STORAGE_KEY = "gigaphone-finance-v1";
+const LAST_OBSERVED_DATE_KEY = "gigaphone-finance-last-observed-date";
+const DAILY_REMINDER_DATE_KEY = "gigaphone-finance-daily-reminder-date";
+const DISMISSED_DAILY_REMINDER_DATE_KEY = "gigaphone-finance-dismissed-daily-reminder-date";
 
 const TRANSACTION_TYPES = [
   "Jual Beli HP",
@@ -58,7 +61,6 @@ const el = {
   hpServiceTotalProfit: document.querySelector("#hpServiceTotalProfit"),
   mandiriAccount: document.querySelector("#mandiriAccount"),
   mandiriTransactions: document.querySelector("#mandiriTransactions"),
-  recentTransactions: document.querySelector("#recentTransactions"),
   transactionForm: document.querySelector("#transactionForm"),
   transactionId: document.querySelector("#transactionId"),
   typeInput: document.querySelector("#typeInput"),
@@ -94,7 +96,10 @@ const el = {
   dailyBalanceInputs: document.querySelector("#dailyBalanceInputs"),
   exportButton: document.querySelector("#exportButton"),
   importInput: document.querySelector("#importInput"),
-  installButton: document.querySelector("#installButton")
+  installButton: document.querySelector("#installButton"),
+  dailyRolloverNotice: document.querySelector("#dailyRolloverNotice"),
+  dailyRolloverSetup: document.querySelector("#dailyRolloverSetup"),
+  dailyRolloverClose: document.querySelector("#dailyRolloverClose")
 };
 
 init();
@@ -104,6 +109,12 @@ function init() {
   populateSelects();
   bindEvents();
   render();
+  checkDateRollover();
+  window.setInterval(checkDateRollover, 60_000);
+  window.addEventListener("pageshow", checkDateRollover);
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "visible") checkDateRollover();
+  });
 
   if ("serviceWorker" in navigator) {
     navigator.serviceWorker.register("service-worker.js");
@@ -204,10 +215,10 @@ function bindEvents() {
   el.accountBalanceForm.addEventListener("submit", saveAccountBalance);
   el.cancelBalanceUpdate.addEventListener("click", () => el.accountBalanceDialog.close());
   el.dailyBalanceShortcut.addEventListener("click", () => {
-    navigate("settings");
-    el.dailyBalanceDate.focus();
-    el.dailyBalanceDate.scrollIntoView({ behavior: "smooth", block: "center" });
+    openDailyBalanceSettings();
   });
+  el.dailyRolloverSetup.addEventListener("click", openDailyBalanceSettings);
+  el.dailyRolloverClose.addEventListener("click", dismissDateRolloverNotice);
   el.dailyBalanceForm.addEventListener("submit", saveDailyBalances);
   el.dashboardNoteForm.addEventListener("submit", saveDashboardNote);
   el.dailyBalanceDate.addEventListener("change", renderDailyBalanceInputs);
@@ -256,6 +267,40 @@ function navigate(page) {
   const title = document.querySelector(`#page-${page}`).dataset.title;
   document.querySelector(".topbar h1").textContent = title === "Dashboard" ? "GigaPhone Finance" : title;
   window.scrollTo({ top: 0, behavior: "smooth" });
+}
+
+function checkDateRollover() {
+  const today = todayISO();
+  const lastObservedDate = localStorage.getItem(LAST_OBSERVED_DATE_KEY);
+  if (lastObservedDate && lastObservedDate !== today) {
+    localStorage.setItem(DAILY_REMINDER_DATE_KEY, today);
+  } else if (!lastObservedDate) {
+    const lastActivityDate = [
+      ...Object.keys(state.dailyBalances || {}),
+      ...state.transactions.map((transaction) => transaction.date).filter(Boolean)
+    ].sort().at(-1);
+    if (lastActivityDate && lastActivityDate < today) {
+      localStorage.setItem(DAILY_REMINDER_DATE_KEY, today);
+    }
+  }
+  const reminderDate = localStorage.getItem(DAILY_REMINDER_DATE_KEY);
+  el.dailyRolloverNotice.hidden = reminderDate !== today ||
+    localStorage.getItem(DISMISSED_DAILY_REMINDER_DATE_KEY) === today;
+  localStorage.setItem(LAST_OBSERVED_DATE_KEY, today);
+}
+
+function dismissDateRolloverNotice() {
+  localStorage.setItem(DISMISSED_DAILY_REMINDER_DATE_KEY, todayISO());
+  el.dailyRolloverNotice.hidden = true;
+}
+
+function openDailyBalanceSettings() {
+  dismissDateRolloverNotice();
+  el.dailyBalanceDate.value = todayISO();
+  renderDailyBalanceInputs();
+  navigate("settings");
+  el.dailyBalanceDate.focus();
+  el.dailyBalanceDate.scrollIntoView({ behavior: "smooth", block: "center" });
 }
 
 function saveTransaction(event) {
@@ -437,8 +482,10 @@ function renderPreview() {
   const isExpense = el.typeInput.value === "Belanja Kebutuhan";
   const isCashDeposit = el.typeInput.value === "Setor Tunai";
   const isPawn = el.typeInput.value === "Gadai HP";
+  const profit = isExpense || isCashDeposit || isPawn ? 0 : isCashWithdraw ? sell : sell - cost;
   el.previewIn.textContent = money(isExpense || isPawn ? 0 : isCashWithdraw ? cost + sell : isCashDeposit ? cost : sell);
-  el.previewProfit.textContent = money(isExpense || isCashDeposit || isPawn ? 0 : isCashWithdraw ? sell : sell - cost);
+  el.previewProfit.textContent = money(profit);
+  el.previewProfit.className = profit < 0 ? "profit-negative" : "profit-positive";
 }
 
 function render() {
@@ -477,13 +524,12 @@ function renderDashboard() {
   el.dashboardNote.textContent = state.dashboardNote || "Belum ada catatan.";
 
   el.quickActions.innerHTML = QUICK_ACTION_TYPES.map((type) => `
-    <button type="button" data-type="${type}" aria-label="${type}" title="${type}">
+    <button type="button" data-type="${type}" aria-label="${getQuickActionLabel(type)}" title="${getQuickActionLabel(type)}">
       <span class="quick-logo ${getQuickActionIcon(type).className}" aria-hidden="true">${getQuickActionIcon(type).label}</span>
-      <span>${type}</span>
+      <span>${getQuickActionLabel(type)}</span>
     </button>
   `).join("");
 
-  renderTransactionList(el.recentTransactions, getSortedTransactions().slice(0, 5), { compact: true, hideHpServiceProfit: true });
 }
 
 function renderHpService() {
@@ -686,6 +732,10 @@ function getQuickActionIcon(type) {
     "Setor Tunai": { label: "SETOR", className: "logo-cash" }
   };
   return icons[type] || { label: "", className: "" };
+}
+
+function getQuickActionLabel(type) {
+  return type === "Belanja Kebutuhan" ? "Belanja" : type;
 }
 
 function getAccountLogo(accountId) {
