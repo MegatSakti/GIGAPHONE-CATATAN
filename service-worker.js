@@ -1,9 +1,9 @@
-const CACHE_NAME = "gigaphone-finance-v20-bank-transactions";
+const CACHE_NAME = "gigaphone-finance-v21-bank-hp-fixes";
 const ASSETS = [
   "./",
   "./index.html",
   "./style.css",
-  "./app.js?v=20261112-bank",
+  "./app.js?v=20261112-bank-hp-fixes",
   "./manifest.json",
   "./icon-192.png",
   "./assets/account-logos/cash.svg",
