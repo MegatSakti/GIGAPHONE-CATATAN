@@ -15,17 +15,20 @@ const TRANSACTION_TYPES = [
   "Paket Data",
   "Tarik Tunai",
   "Belanja Kebutuhan",
+  "Transfer Bank",
   "Setor Tunai"
 ];
 
-const QUICK_ACTION_TYPES = TRANSACTION_TYPES.filter((type) => type !== "Service / JB HP");
 const HP_SERVICE_TYPES = new Set(["Jual Beli HP", "Service HP", "Service / JB HP"]);
+const QUICK_ACTION_TYPES = TRANSACTION_TYPES.filter((type) =>
+  !HP_SERVICE_TYPES.has(type) && type !== "Transfer Bank" && type !== "Setor Tunai"
+);
 
 const ACCOUNT_DEFAULTS = [
   { id: "cash", name: "Cash", openingBalance: 0 },
   { id: "seabank", name: "SeaBank", openingBalance: 0 },
   { id: "bri", name: "BRI", openingBalance: 0 },
-  { id: "mandiri", name: "Bank Mandiri", openingBalance: 500000 },
+  { id: "mandiri", name: "Bank Mandiri", openingBalance: 0 },
   { id: "bca", name: "BCA", openingBalance: 0 }
 ];
 
@@ -69,11 +72,15 @@ const el = {
   descriptionInput: document.querySelector("#descriptionInput"),
   costInput: document.querySelector("#costInput"),
   sellInput: document.querySelector("#sellInput"),
+  typeField: document.querySelector("#typeField"),
+  bankTabs: document.querySelector("#bankTabs"),
   accountInput: document.querySelector("#accountInput"),
+  accountField: document.querySelector("#accountField"),
   accountFieldLabel: document.querySelector("#accountField span"),
   adminFeeNotice: document.querySelector("#adminFeeNotice"),
   costField: document.querySelector("#costField span"),
   sellField: document.querySelector("#sellField span"),
+  previewOut: document.querySelector("#previewOut"),
   previewIn: document.querySelector("#previewIn"),
   previewProfit: document.querySelector("#previewProfit"),
   formTitle: document.querySelector("#formTitle"),
@@ -158,6 +165,13 @@ function ensureAccountDefaults() {
     ...account,
     ...(existing.get(account.id) || {})
   })).concat(savedAccounts.filter((account) => !defaultIds.has(account.id)));
+  const mandiri = state.accounts.find((account) => account.id === "mandiri");
+  const hasMandiriMovements = state.transactions.some((transaction) =>
+    getTransactionMovements(transaction).some((movement) => movement.accountId === "mandiri")
+  );
+  if (mandiri?.openingBalance === 500000 && !hasMandiriMovements) {
+    mandiri.openingBalance = 0;
+  }
   saveState();
 }
 
@@ -189,7 +203,7 @@ function updateTransactionAccountOptions() {
     el.accountInput.innerHTML = mandiri ? `<option value="${mandiri.id}">${mandiri.name}</option>` : "";
     return;
   }
-  const bankOnly = isTopUp(type) || type === "Tarik Tunai" || type === "Setor Tunai";
+  const bankOnly = isTopUp(type) || type === "Tarik Tunai" || type === "Setor Tunai" || type === "Transfer Bank";
   const accounts = bankOnly ? state.accounts.filter((account) => account.id !== "cash") : state.accounts;
   el.accountInput.innerHTML = accounts.map((account) => `<option value="${account.id}">${account.name}</option>`).join("");
   if (accounts.some((account) => account.id === selected)) {
@@ -214,10 +228,18 @@ function bindEvents() {
     const button = event.target.closest("button[data-type]");
     if (!button) return;
     resetForm();
-    el.typeInput.value = button.dataset.type;
+    el.transactionForm.dataset.fixedType = "true";
+    el.typeInput.value = button.dataset.type === "Bank" ? "Transfer Bank" : button.dataset.type;
     updateTransactionFormLabels();
     navigate("transaction");
   }));
+
+  el.bankTabs.addEventListener("click", (event) => {
+    const button = event.target.closest("button[data-bank-type]");
+    if (!button) return;
+    el.typeInput.value = button.dataset.bankType;
+    updateTransactionFormLabels();
+  });
 
   el.transactionForm.addEventListener("submit", saveTransaction);
   el.dashboardAccounts.addEventListener("click", openAccountBalanceDialog);
@@ -324,14 +346,17 @@ function saveTransaction(event) {
   const isCashWithdraw = type === "Tarik Tunai";
   const isExpense = type === "Belanja Kebutuhan";
   const isCashDeposit = type === "Setor Tunai";
+  const isBankTransfer = type === "Transfer Bank";
   const isPawn = type === "Gadai HP";
-  const moneyIn = isExpense || isPawn ? 0 : isCashWithdraw ? cost + sellRaw : isCashDeposit ? cost : sellRaw;
+  const moneyIn = isExpense || isPawn ? 0 : isCashWithdraw ? cost + sellRaw : isCashDeposit || isBankTransfer ? cost : sellRaw;
   const selectedAccountId = isDanaTopUp ? "seabank" : isHpServiceType(type) ? "mandiri" : el.accountInput.value;
   const cashId = state.accounts.find((account) => account.id === "cash")?.id || "cash";
-  const sourceAccountId = isTopUpTransaction ? selectedAccountId : isCashWithdraw || isCashDeposit ? cashId : selectedAccountId;
-  const destinationAccountId = isTopUpTransaction ? cashId : selectedAccountId;
+  const sourceAccountId = isTopUpTransaction || isBankTransfer ? selectedAccountId : isCashWithdraw || isCashDeposit ? cashId : selectedAccountId;
+  const destinationAccountId = isTopUpTransaction || isBankTransfer ? cashId : selectedAccountId;
   const movements = isTopUpTransaction
     ? [{ accountId: sourceAccountId, amount: -(cost + (isDanaTopUp ? DANA_ADMIN_FEE : 0)) }, { accountId: destinationAccountId, amount: sellRaw }]
+    : isBankTransfer
+      ? [{ accountId: sourceAccountId, amount: -cost }, { accountId: destinationAccountId, amount: cost }]
     : isCashWithdraw
       ? [{ accountId: sourceAccountId, amount: -cost }, { accountId: destinationAccountId, amount: moneyIn }]
       : isCashDeposit
@@ -436,8 +461,10 @@ function handleHistoryAction(event) {
 }
 
 function editTransaction(transaction) {
+  el.transactionForm.dataset.fixedType = "false";
   el.transactionId.value = transaction.id;
   el.typeInput.value = transaction.type;
+  updateTransactionAccountOptions();
   el.dateInput.value = transaction.date;
   el.descriptionInput.value = transaction.description || "";
   el.costInput.value = formatAmount(transaction.cost);
@@ -462,6 +489,7 @@ function getEditableSellValue(transaction) {
 
 function resetForm() {
   el.transactionForm.reset();
+  el.transactionForm.dataset.fixedType = "false";
   el.transactionId.value = "";
   el.dateInput.value = todayISO();
   el.formTitle.textContent = "Tambah Transaksi";
@@ -472,20 +500,35 @@ function resetForm() {
 
 function updateTransactionFormLabels() {
   updateTransactionAccountOptions();
+  const type = el.typeInput.value;
   const isCashWithdraw = el.typeInput.value === "Tarik Tunai";
-  const isTopUpTransaction = isTopUp(el.typeInput.value);
-  const isDanaTopUp = el.typeInput.value === "Top Up DANA";
-  const isExpense = el.typeInput.value === "Belanja Kebutuhan";
-  const isCashDeposit = el.typeInput.value === "Setor Tunai";
-  const isPawn = el.typeInput.value === "Gadai HP";
-  el.costField.textContent = isPawn ? "Nominal Gadai" : isExpense ? "Nominal Belanja" : isCashWithdraw ? "Nominal Tarik Tunai (keluar Cash)" : isCashDeposit ? "Nominal Setor Tunai (keluar Cash)" : isTopUpTransaction ? "Modal (keluar bank)" : "Modal / Nominal Keluar";
-  el.sellField.textContent = isPawn ? "Profit Gadai HP (Rp0)" : isExpense ? "Uang Masuk" : isCashWithdraw ? "Fee" : isCashDeposit ? "Uang Masuk Bank" : isTopUpTransaction ? "Harga Jual (masuk Cash)" : "Harga Jual / Fee";
-  el.accountFieldLabel.textContent = isHpServiceType(el.typeInput.value) ? "Akun Bank Mandiri" : isDanaTopUp ? "Akun Sumber (SeaBank)" : isTopUpTransaction ? "Akun Bank Sumber" : isCashWithdraw || isCashDeposit ? "Akun Bank Tujuan" : "Akun";
+  const isTopUpTransaction = isTopUp(type);
+  const isDanaTopUp = type === "Top Up DANA";
+  const isExpense = type === "Belanja Kebutuhan";
+  const isCashDeposit = type === "Setor Tunai";
+  const isBankTransfer = type === "Transfer Bank";
+  const isPawn = type === "Gadai HP";
+  const hideSell = isExpense || isCashDeposit || isBankTransfer || isPawn;
+  if (!el.transactionId.value) {
+    el.formTitle.textContent = isCashDeposit || isBankTransfer ? "Transaksi Bank" : "Tambah Transaksi";
+  }
+  el.typeField.hidden = isBankTransfer || isCashDeposit || el.transactionForm.dataset.fixedType === "true";
+  el.bankTabs.hidden = !isBankTransfer && !isCashDeposit;
+  el.bankTabs.querySelectorAll("[data-bank-type]").forEach((button) => {
+    const selected = button.dataset.bankType === type;
+    button.classList.toggle("active", selected);
+    button.setAttribute("aria-selected", String(selected));
+  });
+  el.costField.textContent = isPawn ? "Nominal Gadai" : isExpense ? "Nominal Belanja" : isCashWithdraw ? "Nominal Tarik Tunai" : isCashDeposit ? "Nominal Setor Tunai" : isBankTransfer ? "Nominal Transfer" : isTopUpTransaction ? "Modal (keluar bank)" : "Modal / Nominal Keluar";
+  el.sellField.textContent = isPawn ? "Profit Gadai HP (Rp0)" : isExpense ? "Uang Masuk" : isCashWithdraw ? "Fee" : isCashDeposit ? "Uang Masuk Bank" : isBankTransfer ? "Profit Transfer Bank (Rp0)" : isTopUpTransaction ? "Harga Jual (masuk Cash)" : "Harga Jual / Fee";
+  el.accountFieldLabel.textContent = isHpServiceType(type) ? "Akun Bank Mandiri" : isDanaTopUp ? "Akun Sumber (SeaBank)" : isTopUpTransaction || isBankTransfer ? "Akun Bank Sumber" : isCashDeposit ? "Akun Bank Tujuan" : isCashWithdraw ? "Akun Bank Tujuan" : isExpense ? "Akun Pembayaran" : isPawn ? "Sumber Dana" : "Akun";
   el.adminFeeNotice.hidden = !isDanaTopUp;
   el.sellInput.placeholder = isCashWithdraw ? "Contoh: 5000" : "0";
-  el.sellInput.disabled = isExpense || isCashDeposit || isPawn;
-  el.sellInput.required = !isExpense && !isCashDeposit && !isPawn;
-  if (isExpense || isCashDeposit || isPawn) el.sellInput.value = "";
+  const sellLabel = el.sellInput.closest("label");
+  sellLabel.hidden = hideSell;
+  el.sellInput.disabled = hideSell;
+  el.sellInput.required = !hideSell;
+  if (hideSell) el.sellInput.value = "";
   renderPreview();
 }
 
@@ -495,9 +538,15 @@ function renderPreview() {
   const isCashWithdraw = el.typeInput.value === "Tarik Tunai";
   const isExpense = el.typeInput.value === "Belanja Kebutuhan";
   const isCashDeposit = el.typeInput.value === "Setor Tunai";
+  const isBankTransfer = el.typeInput.value === "Transfer Bank";
+  const isTopUpTransaction = isTopUp(el.typeInput.value);
+  const isDanaTopUp = el.typeInput.value === "Top Up DANA";
   const isPawn = el.typeInput.value === "Gadai HP";
-  const profit = isExpense || isCashDeposit || isPawn ? 0 : isCashWithdraw ? sell : sell - cost;
-  el.previewIn.textContent = money(isExpense || isPawn ? 0 : isCashWithdraw ? cost + sell : isCashDeposit ? cost : sell);
+  const outgoing = isTopUpTransaction ? cost + (isDanaTopUp ? DANA_ADMIN_FEE : 0) : cost;
+  const incoming = isExpense || isPawn ? 0 : isCashWithdraw ? cost + sell : isCashDeposit || isBankTransfer ? cost : sell;
+  const profit = isExpense || isCashDeposit || isBankTransfer || isPawn ? 0 : isCashWithdraw ? sell : sell - cost;
+  el.previewOut.textContent = money(outgoing);
+  el.previewIn.textContent = money(incoming);
   el.previewProfit.textContent = money(profit);
   el.previewProfit.className = profit < 0 ? "profit-negative" : "profit-positive";
 }
@@ -542,7 +591,12 @@ function renderDashboard() {
       <span class="quick-logo ${getQuickActionIcon(type).className}" aria-hidden="true">${getQuickActionIcon(type).label}</span>
       <span>${getQuickActionLabel(type)}</span>
     </button>
-  `).join("");
+  `).join("") + `
+    <button type="button" data-type="Bank" aria-label="Bank" title="Bank">
+      <span class="quick-logo logo-bank" aria-hidden="true">BANK</span>
+      <span>Bank</span>
+    </button>
+  `;
 
 }
 
@@ -743,6 +797,7 @@ function getQuickActionIcon(type) {
     "Paket Data": { label: "DATA", className: "logo-data" },
     "Tarik Tunai": { label: "CASH", className: "logo-cash" },
     "Belanja Kebutuhan": { label: "BELANJA", className: "logo-expense" },
+    "Transfer Bank": { label: "BANK", className: "logo-bank" },
     "Setor Tunai": { label: "SETOR", className: "logo-cash" }
   };
   return icons[type] || { label: "", className: "" };
@@ -812,7 +867,7 @@ function getSortedTransactions() {
 }
 
 function getProfit(transaction) {
-  if (transaction.type === "Gadai HP") return 0;
+  if (transaction.type === "Gadai HP" || transaction.type === "Transfer Bank" || transaction.type === "Setor Tunai") return 0;
   if (transaction.type === "Tarik Tunai") {
     return transaction.fee ?? transaction.sell - transaction.cost;
   }

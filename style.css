@@ -19,6 +19,10 @@
   box-sizing: border-box;
 }
 
+[hidden] {
+  display: none !important;
+}
+
 html {
   min-height: 100%;
   background: var(--bg);
@@ -407,6 +411,7 @@ h2 {
 .logo-cash { background: #b86e00; }
 .logo-expense { background: #df2f47; font-size: 0.54rem; }
 .logo-pawn { background: #8a5a18; }
+.logo-bank { background: #0b65d8; }
 
 .quick-actions button:active,
 .primary-button:active,
@@ -591,10 +596,43 @@ textarea:focus {
 
 .computed-card {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 10px;
   padding: 13px;
   background: var(--blue-050);
+}
+
+.bank-tabs {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+  padding: 5px;
+  border: 1px solid #d5e6fb;
+  border-radius: 16px;
+  background: #edf5ff;
+}
+
+.bank-tabs button {
+  min-height: 44px;
+  padding: 8px 10px;
+  border: 0;
+  border-radius: 12px;
+  background: transparent;
+  color: #426184;
+  font-size: 0.84rem;
+  font-weight: 750;
+  transition: background 140ms ease, color 140ms ease, box-shadow 140ms ease;
+}
+
+.bank-tabs button.active {
+  background: #fff;
+  color: var(--blue-900);
+  box-shadow: 0 3px 10px rgba(12, 61, 126, 0.1);
+}
+
+.bank-tabs button:focus-visible {
+  outline: 3px solid rgba(20, 120, 239, 0.4);
+  outline-offset: 2px;
 }
 
 .computed-card strong {

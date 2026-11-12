@@ -127,10 +127,15 @@
           <form id="transactionForm">
             <input type="hidden" id="transactionId">
 
-            <label>
+            <label id="typeField">
               <span>Jenis Transaksi</span>
               <select id="typeInput" required></select>
             </label>
+
+            <div class="bank-tabs" id="bankTabs" role="tablist" aria-label="Jenis transaksi Bank" hidden>
+              <button type="button" class="active" data-bank-type="Transfer Bank" role="tab" aria-selected="true">Transfer Bank</button>
+              <button type="button" data-bank-type="Setor Tunai" role="tab" aria-selected="false">Setor Tunai</button>
+            </div>
 
             <label>
               <span>Tanggal</span>
@@ -154,7 +159,11 @@
 
             <div class="computed-card" id="computedPreview">
               <div>
-                <span>Total Masuk</span>
+                <span>Uang Keluar</span>
+                <strong id="previewOut">Rp0</strong>
+              </div>
+              <div>
+                <span>Uang Masuk</span>
                 <strong id="previewIn">Rp0</strong>
               </div>
               <div>
@@ -290,6 +299,6 @@
     <div class="empty-state">Belum ada data.</div>
   </template>
 
-  <script src="app.js?v=20261110-release3"></script>
+  <script src="app.js?v=20261112-bank"></script>
 </body>
 </html>
