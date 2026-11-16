@@ -246,7 +246,10 @@ function getDefaultTopUpFee(type) {
   return type === "Top Up DANA" ? DANA_ADMIN_FEE : type === "Top Up GoPay" ? GOPAY_ADMIN_FEE : 0;
 }
 
-function getTopUpFee(transaction) {
+function getProviderFee(transaction) {
+  if (Number.isFinite(Number(transaction.providerFee)) && transaction.providerFee !== null && transaction.providerFee !== "") {
+    return Number(transaction.providerFee);
+  }
   if (Number.isFinite(Number(transaction.fee)) && transaction.fee !== null && transaction.fee !== "") {
     return Number(transaction.fee);
   }
@@ -425,6 +428,7 @@ function saveTransaction(event) {
   const isCashDeposit = type === "Setor Tunai";
   const isBankTransfer = type === "Transfer Bank";
   const isPawn = type === "Gadai HP";
+  const providerFee = isFeeTopUpTransaction ? getDefaultTopUpFee(type) : 0;
   const moneyIn = isExpense || isPawn
     ? 0
     : isCashWithdraw
@@ -432,7 +436,7 @@ function saveTransaction(event) {
       : isCashDeposit
         ? cost
         : isFeeTopUpTransaction
-          ? cost + sellRaw
+          ? cost
           : sellRaw;
   const selectedAccountId = el.accountInput.value;
   const cashId = state.accounts.find((account) => account.id === "cash")?.id || "cash";
@@ -443,7 +447,7 @@ function saveTransaction(event) {
       ? cashId
       : selectedAccountId;
   const movements = isFeeTopUpTransaction
-    ? [{ accountId: sourceAccountId, amount: -cost }, { accountId: destinationAccountId, amount: moneyIn }]
+    ? [{ accountId: sourceAccountId, amount: -(cost + providerFee) }, { accountId: destinationAccountId, amount: cost }]
     : isTopUpTransaction
       ? [{ accountId: sourceAccountId, amount: -cost }, { accountId: destinationAccountId, amount: sellRaw }]
     : isBankTransfer
@@ -463,13 +467,17 @@ function saveTransaction(event) {
     description: el.descriptionInput.value.trim(),
     cost,
     sell: isBankTransfer ? sellRaw : moneyIn,
-    fee: isFeeTopUpTransaction || isCashWithdraw ? sellRaw : null,
-    ...(isDanaTopUp ? { adminFee: sellRaw } : {}),
+    fee: isCashWithdraw ? sellRaw : null,
+    ...(isFeeTopUpTransaction ? {
+      providerFee,
+      providerFeeLabel: isDanaTopUp ? "Admin DANA" : "Admin GoPay"
+    } : {}),
     expense: isExpense,
     accountId: selectedAccountId,
     sourceAccountId,
     destinationAccountId,
     movements,
+    accountMovements: movements,
     createdAt: el.transactionId.value ? getExistingCreatedAt(el.transactionId.value) : new Date().toISOString()
   };
 
@@ -505,6 +513,7 @@ function savePawnTransaction() {
       sourceAccountId: null,
       destinationAccountId: selectedAccountId,
       movements: [{ accountId: selectedAccountId, amount: redemptionAmount }],
+      accountMovements: [{ accountId: selectedAccountId, amount: redemptionAmount }],
       createdAt
     };
   } else {
@@ -522,6 +531,7 @@ function savePawnTransaction() {
       sourceAccountId: selectedAccountId,
       destinationAccountId: null,
       movements: [{ accountId: selectedAccountId, amount: -cost }],
+      accountMovements: [{ accountId: selectedAccountId, amount: -cost }],
       createdAt
     };
   }
@@ -546,6 +556,9 @@ function saveHpTransaction() {
     sourceAccountId: accountId,
     destinationAccountId: accountId,
     movements: accountId === "cash"
+      ? [{ accountId, amount: sell }]
+      : [{ accountId, amount: -cost }, { accountId, amount: sell }],
+    accountMovements: accountId === "cash"
       ? [{ accountId, amount: sell }]
       : [{ accountId, amount: -cost }, { accountId, amount: sell }],
     createdAt: el.transactionId.value ? getExistingCreatedAt(el.transactionId.value) : new Date().toISOString()
@@ -597,7 +610,7 @@ function getTransactionMoneyFlow(transaction) {
 }
 
 function getTransactionWarning(transaction) {
-  const excludedTypes = new Set(["Belanja Kebutuhan", "Gadai HP", "Setor Tunai", "Tarik Tunai"]);
+  const excludedTypes = new Set(["Belanja Kebutuhan", "Gadai HP", "Setor Tunai", "Tarik Tunai", "Top Up DANA", "Top Up GoPay"]);
   if (excludedTypes.has(transaction.type)) return null;
 
   const profit = (Number(transaction.sell) || 0) - (Number(transaction.cost) || 0);
@@ -617,7 +630,7 @@ function getTransactionWarning(transaction) {
 }
 
 function validateTransactionInput(transaction) {
-  const excludedPriceTypes = new Set(["Belanja Kebutuhan", "Gadai HP", "Setor Tunai", "Tarik Tunai"]);
+  const excludedPriceTypes = new Set(["Belanja Kebutuhan", "Gadai HP", "Setor Tunai", "Tarik Tunai", "Top Up DANA", "Top Up GoPay"]);
   const requiresPrice = !excludedPriceTypes.has(transaction.type);
   const rawPrice = transaction.pawnAction === "redeem" ? el.redemptionAmountInput.value : el.sellInput.value;
   const hasValidPrice = /\d/.test(String(rawPrice || "")) && Number(transaction.sell) > 0;
@@ -657,6 +670,8 @@ function confirmTransactionBeforeSave(transaction) {
   const isExpense = transaction.type === "Belanja Kebutuhan";
   const isPawnNew = transaction.type === "Gadai HP" && transaction.pawnAction !== "redeem";
   const isHpService = isHpServiceType(transaction.type);
+  const isCashWithdraw = transaction.type === "Tarik Tunai";
+  const isProviderTopUp = isFeeTopUp(transaction.type);
   const movementTotals = getMovementTotals(transaction);
   const nominalOut = isHpService || isPawnNew || isExpense
     ? Number(transaction.cost) || 0
@@ -673,6 +688,27 @@ function confirmTransactionBeforeSave(transaction) {
     item.textContent = line;
     el.confirmTransactionMoneyFlow.append(item);
   });
+  if (isCashWithdraw) {
+    const item = document.createElement("li");
+    item.textContent = `Cash berkurang: ${money(Number(transaction.cost) || 0)}`;
+    el.confirmTransactionMoneyFlow.append(item);
+    const bankIn = (Number(transaction.cost) || 0) + (Number(transaction.fee) || 0);
+    const bankItem = document.createElement("li");
+    bankItem.textContent = `Bank bertambah: ${money(bankIn)}`;
+    el.confirmTransactionMoneyFlow.append(bankItem);
+  }
+  if (isProviderTopUp) {
+    const providerFee = getProviderFee(transaction);
+    const cashItem = document.createElement("li");
+    cashItem.textContent = `Cash masuk: ${money(Number(transaction.cost) || 0)}`;
+    el.confirmTransactionMoneyFlow.append(cashItem);
+    const feeItem = document.createElement("li");
+    feeItem.textContent = `${transaction.providerFeeLabel || (transaction.type === "Top Up DANA" ? "Admin DANA" : "Admin GoPay")}: ${money(providerFee)}`;
+    el.confirmTransactionMoneyFlow.append(feeItem);
+    const bankItem = document.createElement("li");
+    bankItem.textContent = `Total bank berkurang: ${money((Number(transaction.cost) || 0) + providerFee)}`;
+    el.confirmTransactionMoneyFlow.append(bankItem);
+  }
   el.confirmTransactionWarning.textContent = warning?.message || "";
   el.confirmTransactionWarning.hidden = !warning;
   el.confirmTransactionWarning.classList.toggle("transaction-warning-negative", warning?.type === "negative");
@@ -787,7 +823,7 @@ function editTransaction(transaction) {
 
 function getEditableSellValue(transaction) {
   if (isFeeTopUp(transaction.type)) {
-    return getTopUpFee(transaction);
+    return "";
   }
   if (transaction.type === "Tarik Tunai") {
     return transaction.fee || transaction.sell - transaction.cost;
@@ -851,9 +887,7 @@ function updateSelectedPawn() {
 function configureTopUpFeeForType(type) {
   const previousType = el.transactionForm.dataset.configuredType || "";
   if (type !== previousType) {
-    if (isFeeTopUp(type)) {
-      el.sellInput.value = formatAmount(getDefaultTopUpFee(type));
-    } else if (isFeeTopUp(previousType)) {
+    if (isFeeTopUp(previousType)) {
       el.sellInput.value = "";
     }
     el.transactionForm.dataset.configuredType = type;
@@ -874,7 +908,7 @@ function updateTransactionFormLabels() {
   const isBankTransfer = type === "Transfer Bank";
   const isPawn = type === "Gadai HP";
   const isPawnRedemption = isPawn && el.transactionForm.dataset.pawnMode === "redeem";
-  const hideSell = isExpense || isCashDeposit || isPawn;
+  const hideSell = isExpense || isCashDeposit || isPawn || isFeeTopUpTransaction;
   if (!el.transactionId.value) {
     el.formTitle.textContent = isCashDeposit || isBankTransfer ? "Transaksi Bank" : isHpService ? "Transaksi HP & Service" : "Tambah Transaksi";
   }
@@ -908,8 +942,10 @@ function updateTransactionFormLabels() {
   });
   el.costField.textContent = isPawn ? "Nominal Gadai" : isExpense ? "Nominal Belanja" : isCashWithdraw ? "Nominal Tarik Tunai" : isCashDeposit ? "Nominal Setor Tunai" : isFeeTopUpTransaction ? "Nominal Top Up" : isBankTransfer ? "Modal / Nominal Keluar" : isHpService ? "Modal" : isTopUpTransaction ? "Modal (keluar bank)" : "Modal / Nominal Keluar";
   el.sellField.textContent = isPawn ? "Profit Gadai HP (Rp0)" : isExpense ? "Uang Masuk" : isCashWithdraw || isFeeTopUpTransaction ? "Fee/Admin" : isCashDeposit ? "Uang Masuk Bank" : isHpService || isBankTransfer ? "Harga Jual / Fee" : isTopUpTransaction ? "Harga Jual (masuk Cash)" : "Harga Jual / Fee";
-  el.accountFieldLabel.textContent = isPawnRedemption ? "Akun Penerima Uang" : isHpService ? "Metode Pembayaran" : isFeeTopUpTransaction || isTopUpTransaction || isBankTransfer ? "Akun Bank Sumber" : isCashDeposit || isCashWithdraw ? "Akun Bank Tujuan" : isExpense ? "Akun Pembayaran" : isPawn ? "Akun Sumber Dana" : "Akun";
-  el.adminFeeNotice.textContent = `Fee default ${isDanaTopUp ? money(DANA_ADMIN_FEE) : money(GOPAY_ADMIN_FEE)}. Fee dapat diedit.`;
+  el.accountFieldLabel.textContent = isPawnRedemption ? "Akun Penerima Uang" : isHpService ? "Metode Pembayaran" : isFeeTopUpTransaction || isTopUpTransaction || isBankTransfer ? "Sumber Dana Bank" : isCashDeposit ? "Akun Bank Tujuan" : isCashWithdraw ? "Akun Bank Penerima" : isExpense ? "Akun Pembayaran" : isPawn ? "Akun Sumber Dana" : "Akun";
+  el.adminFeeNotice.textContent = isDanaTopUp
+    ? `Admin DANA ${money(DANA_ADMIN_FEE)}`
+    : `Admin GoPay ${money(GOPAY_ADMIN_FEE)}`;
   el.adminFeeNotice.hidden = !isFeeTopUpTransaction;
   el.sellInput.placeholder = isCashWithdraw || isFeeTopUpTransaction ? "Contoh: Rp1.000" : "Rp0";
   const sellLabel = el.sellInput.closest("label");
@@ -937,9 +973,9 @@ function renderPreview() {
   const isCashDeposit = el.typeInput.value === "Setor Tunai";
   const isFeeTopUpTransaction = isFeeTopUp(el.typeInput.value);
   const isPawn = el.typeInput.value === "Gadai HP";
-  const outgoing = cost;
-  const incoming = isExpense || isPawn ? 0 : isCashWithdraw ? cost + sell : isCashDeposit ? cost : isFeeTopUpTransaction ? cost + sell : sell;
-  const profit = isExpense || isCashDeposit || isPawn ? 0 : isCashWithdraw || isFeeTopUpTransaction ? sell : sell - cost;
+  const outgoing = isFeeTopUpTransaction ? cost + getDefaultTopUpFee(el.typeInput.value) : cost;
+  const incoming = isExpense || isPawn ? 0 : isCashWithdraw ? cost + sell : isCashDeposit ? cost : isFeeTopUpTransaction ? cost : sell;
+  const profit = isExpense || isCashDeposit || isPawn || isFeeTopUpTransaction ? 0 : isCashWithdraw ? sell : sell - cost;
   el.previewOut.textContent = money(outgoing);
   el.previewIn.textContent = money(incoming);
   el.previewProfit.textContent = money(profit);
@@ -1087,7 +1123,9 @@ function renderReports() {
 
   el.typeBreakdown.innerHTML = TRANSACTION_TYPES.map((type) => {
     const items = state.transactions.filter((item) => item.type === type);
-    return breakdownItem(type, items.length, sumProfit(items), sumIn(items), sumOut(items));
+    const providerFee = items.reduce((sum, item) => sum + (isFeeTopUp(type) ? getProviderFee(item) : 0), 0);
+    const providerFeeLabel = type === "Top Up DANA" ? "Total Admin DANA" : "Total Admin GoPay";
+    return breakdownItem(type, items.length, sumProfit(items), sumIn(items), sumOut(items), "Profit", providerFee, providerFeeLabel);
   }).join("");
 
   el.accountBreakdown.innerHTML = getAccountSummaries().map((account) => {
@@ -1163,6 +1201,7 @@ function renderTransactionList(container, transactions, options = {}) {
     const showProfit = !(options.hideHpServiceProfit && isHpServiceType(transaction.type));
     const detail = transaction.description || "-";
     const totals = getMovementTotals(transaction);
+    const providerFee = isFeeTopUp(transaction.type) ? getProviderFee(transaction) : 0;
     return `
       <article class="transaction-item">
         <div>
@@ -1182,6 +1221,10 @@ function renderTransactionList(container, transactions, options = {}) {
             <small>Masuk</small>
             <strong class="money-in">${money(totals.in)}</strong>
           </div>
+          ${providerFee ? `<div>
+            <small>${transaction.providerFeeLabel || (transaction.type === "Top Up DANA" ? "Admin DANA" : "Admin GoPay")}</small>
+            <strong>${money(providerFee)}</strong>
+          </div>` : ""}
           ${showProfit ? `<div>
             <small>Profit</small>
             <strong class="${profit >= 0 ? "profit-positive" : "profit-negative"}">${money(profit)}</strong>
@@ -1198,7 +1241,7 @@ function renderTransactionList(container, transactions, options = {}) {
   }).join("");
 }
 
-function breakdownItem(title, count, metricValue, totalIn, totalOut, metricLabel = "Profit") {
+function breakdownItem(title, count, metricValue, totalIn, totalOut, metricLabel = "Profit", providerFee = 0, providerFeeLabel = "Biaya Admin") {
   return `
     <article class="breakdown-item">
       <div class="breakdown-row">
@@ -1207,6 +1250,7 @@ function breakdownItem(title, count, metricValue, totalIn, totalOut, metricLabel
       </div>
       <div class="account-line"><span>Masuk</span><span class="money-in">${money(totalIn)}</span></div>
       <div class="account-line"><span>Keluar</span><span class="money-out">${money(totalOut)}</span></div>
+      ${providerFee > 0 ? `<div class="account-line"><span>${providerFeeLabel}</span><span>${money(providerFee)}</span></div>` : ""}
       <div class="account-line"><span>${metricLabel}</span><strong class="${metricValue >= 0 ? "profit-positive" : "profit-negative"}">${money(metricValue)}</strong></div>
     </article>
   `;
@@ -1295,7 +1339,7 @@ function getSortedTransactions() {
 
 function getProfit(transaction) {
   if (isFeeTopUp(transaction.type)) {
-    return getTopUpFee(transaction);
+    return 0;
   }
   if (transaction.type === "Gadai HP") {
     return transaction.pawnAction === "redeem" ? (Number(transaction.sell) || 0) - (Number(transaction.cost) || 0) : 0;
@@ -1338,6 +1382,12 @@ function sumOut(transactions) {
 }
 
 function getAccountMovements(transaction) {
+  const storedMovements = Array.isArray(transaction.accountMovements)
+    ? transaction.accountMovements
+    : Array.isArray(transaction.movements)
+      ? transaction.movements
+      : [];
+
   if (transaction.type === "Tarik Tunai") {
     const bankAccountId = transaction.accountId;
     const cashAccountId = "cash";
@@ -1351,7 +1401,6 @@ function getAccountMovements(transaction) {
   }
 
   if (isFeeTopUp(transaction.type)) {
-    const storedMovements = Array.isArray(transaction.movements) ? transaction.movements : [];
     const sourceAccountId = transaction.sourceAccountId ||
       storedMovements.find((movement) => movement?.amount < 0)?.accountId ||
       transaction.accountId;
@@ -1359,10 +1408,10 @@ function getAccountMovements(transaction) {
       storedMovements.find((movement) => movement?.amount > 0)?.accountId ||
       "cash";
     const nominalTopUp = Number(transaction.cost) || 0;
-    const cashIn = nominalTopUp + getTopUpFee(transaction);
+    const providerFee = getProviderFee(transaction);
     return [
-      ...(sourceAccountId ? [{ accountId: sourceAccountId, amount: -nominalTopUp }] : []),
-      ...(destinationAccountId ? [{ accountId: destinationAccountId, amount: cashIn }] : [])
+      ...(sourceAccountId ? [{ accountId: sourceAccountId, amount: -(nominalTopUp + providerFee) }] : []),
+      ...(destinationAccountId ? [{ accountId: destinationAccountId, amount: nominalTopUp }] : [])
     ];
   }
 
@@ -1373,8 +1422,8 @@ function getAccountMovements(transaction) {
     }
   }
 
-  if (Array.isArray(transaction.movements)) {
-    return transaction.movements
+  if (storedMovements.length) {
+    return storedMovements
       .filter((movement) => movement && movement.accountId && Number.isFinite(Number(movement.amount)))
       .map((movement) => ({ accountId: movement.accountId, amount: Number(movement.amount) }));
   }
