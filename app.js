@@ -436,8 +436,12 @@ function saveTransaction(event) {
           : sellRaw;
   const selectedAccountId = el.accountInput.value;
   const cashId = state.accounts.find((account) => account.id === "cash")?.id || "cash";
-  const sourceAccountId = isTopUpTransaction || isBankTransfer || isCashWithdraw ? selectedAccountId : isCashDeposit ? cashId : selectedAccountId;
-  const destinationAccountId = isTopUpTransaction || isBankTransfer || isCashWithdraw ? cashId : selectedAccountId;
+  const sourceAccountId = isCashWithdraw || isCashDeposit ? cashId : selectedAccountId;
+  const destinationAccountId = isCashWithdraw
+    ? selectedAccountId
+    : isCashDeposit || isTopUpTransaction || isBankTransfer
+      ? cashId
+      : selectedAccountId;
   const movements = isFeeTopUpTransaction
     ? [{ accountId: sourceAccountId, amount: -cost }, { accountId: destinationAccountId, amount: moneyIn }]
     : isTopUpTransaction
@@ -570,8 +574,8 @@ function getTransactionMoneyFlow(transaction) {
     sourceAccountId = cashId;
     destinationAccountId = transaction.destinationAccountId || accountId;
   } else if (transaction.type === "Tarik Tunai") {
-    sourceAccountId = transaction.sourceAccountId || accountId;
-    destinationAccountId = cashId;
+    sourceAccountId = cashId;
+    destinationAccountId = accountId;
   } else if (isTopUp(transaction.type)) {
     sourceAccountId = transaction.sourceAccountId || accountId;
     destinationAccountId = transaction.destinationAccountId || cashId;
@@ -1334,6 +1338,18 @@ function sumOut(transactions) {
 }
 
 function getAccountMovements(transaction) {
+  if (transaction.type === "Tarik Tunai") {
+    const bankAccountId = transaction.accountId;
+    const cashAccountId = "cash";
+    const nominal = Number(transaction.cost) || 0;
+    const fee = transaction.fee ?? ((Number(transaction.sell) || 0) - nominal);
+    const cashReceivedByBank = nominal + (Number(fee) || 0);
+    return [
+      ...(cashAccountId ? [{ accountId: cashAccountId, amount: -nominal }] : []),
+      ...(bankAccountId ? [{ accountId: bankAccountId, amount: cashReceivedByBank }] : [])
+    ];
+  }
+
   if (isFeeTopUp(transaction.type)) {
     const storedMovements = Array.isArray(transaction.movements) ? transaction.movements : [];
     const sourceAccountId = transaction.sourceAccountId ||
