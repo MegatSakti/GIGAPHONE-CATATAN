@@ -49,6 +49,8 @@ const el = {
   monthProfit: document.querySelector("#monthProfit"),
   pawnTotal: document.querySelector("#pawnTotal"),
   dashboardAccounts: document.querySelector("#dashboardAccounts"),
+  cashHpServiceTodayTotal: document.querySelector("#cashHpServiceTodayTotal"),
+  cashHpServiceNotifications: document.querySelector("#cashHpServiceNotifications"),
   accountBalanceDialog: document.querySelector("#accountBalanceDialog"),
   accountBalanceForm: document.querySelector("#accountBalanceForm"),
   accountBalanceTitle: document.querySelector("#accountBalanceTitle"),
@@ -404,7 +406,9 @@ function saveHpTransaction() {
     accountId,
     sourceAccountId: accountId,
     destinationAccountId: accountId,
-    movements: [{ accountId, amount: -cost }, { accountId, amount: sell }],
+    movements: accountId === "cash"
+      ? [{ accountId, amount: sell }]
+      : [{ accountId, amount: -cost }, { accountId, amount: sell }],
     createdAt: el.transactionId.value ? getExistingCreatedAt(el.transactionId.value) : new Date().toISOString()
   };
   saveTransactionRecord(transaction);
@@ -629,6 +633,15 @@ function renderDashboard() {
   `).join("");
 
   el.dashboardNote.textContent = state.dashboardNote || "Belum ada catatan.";
+
+  const cashHpServiceTransactions = todayTransactions.filter((transaction) =>
+    isHpServiceType(transaction.type) && transaction.accountId === "cash"
+  );
+  const cashHpServiceTotal = cashHpServiceTransactions.reduce((sum, transaction) => sum + getCashHpServiceIncome(transaction), 0);
+  el.cashHpServiceTodayTotal.textContent = `Cash HP & Service hari ini: ${money(cashHpServiceTotal)}`;
+  el.cashHpServiceNotifications.innerHTML = cashHpServiceTransactions.map((transaction) =>
+    `<li>Cash masuk dari HP &amp; Service sebesar ${money(getCashHpServiceIncome(transaction))}</li>`
+  ).join("");
 
   el.quickActions.innerHTML = QUICK_ACTION_TYPES.map((type) => `
     <button type="button" data-type="${type}" aria-label="${getQuickActionLabel(type)}" title="${getQuickActionLabel(type)}">
@@ -944,6 +957,13 @@ function sumOut(transactions) {
 }
 
 function getAccountMovements(transaction) {
+  if (isHpServiceType(transaction.type)) {
+    const accountId = transaction.accountId || transaction.movements?.find((movement) => movement?.accountId)?.accountId;
+    if (accountId === "cash") {
+      return [{ accountId, amount: Number(transaction.sell) || 0 }];
+    }
+  }
+
   if (Array.isArray(transaction.movements)) {
     return transaction.movements
       .filter((movement) => movement && movement.accountId && Number.isFinite(Number(movement.amount)))
@@ -959,6 +979,12 @@ function getAccountMovements(transaction) {
     return [{ accountId, amount: -cost }];
   }
   return [{ accountId, amount: -cost }, { accountId, amount: sell }];
+}
+
+function getCashHpServiceIncome(transaction) {
+  return getAccountMovements(transaction)
+    .filter((movement) => movement.accountId === "cash" && movement.amount > 0)
+    .reduce((sum, movement) => sum + movement.amount, 0);
 }
 
 function getMovementTotals(transaction) {
