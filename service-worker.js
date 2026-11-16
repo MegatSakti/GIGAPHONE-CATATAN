@@ -1,9 +1,9 @@
-const CACHE_NAME = "gigaphone-finance-v26-provider-fees";
+const CACHE_NAME = "gigaphone-finance-v28-customer-topup-fee";
 const ASSETS = [
   "./",
   "./index.html",
   "./style.css",
-  "./app.js?v=20261116-provider-fees",
+  "./app.js?v=20261116-customer-topup-fee",
   "./manifest.json",
   "./icon-192.png",
   "./assets/account-logos/cash.svg",
