@@ -149,6 +149,17 @@
               <button type="button" data-bank-type="Setor Tunai" role="tab" aria-selected="false">Setor Tunai</button>
             </div>
 
+            <div class="bank-tabs" id="pawnTabs" role="tablist" aria-label="Jenis transaksi Gadai HP" hidden>
+              <button type="button" class="active" data-pawn-mode="new" role="tab" aria-selected="true">Gadai Baru</button>
+              <button type="button" data-pawn-mode="redeem" role="tab" aria-selected="false">Tebus Gadai</button>
+            </div>
+
+            <label id="pawnSelectionField" hidden>
+              <span>Pilih Data Gadai Aktif</span>
+              <select id="pawnSelectionInput"></select>
+            </label>
+            <p class="help-text" id="pawnEmptyNotice" hidden>Tidak ada gadai aktif untuk ditebus.</p>
+
             <label>
               <span>Tanggal</span>
               <input id="dateInput" type="date" required>
@@ -157,6 +168,11 @@
             <label>
               <span>Keterangan</span>
               <input id="descriptionInput" type="text" placeholder="Contoh: DANA 100rb, LCD Vivo, Paket Telkomsel">
+            </label>
+
+            <label id="redemptionAmountField" hidden>
+              <span>Nominal Tebus</span>
+              <input id="redemptionAmountInput" type="text" inputmode="numeric" placeholder="Rp0">
             </label>
 
             <label id="costField">
@@ -311,6 +327,6 @@
     <div class="empty-state">Belum ada data.</div>
   </template>
 
-  <script src="app.js?v=20261116-hp-cash-notifications"></script>
+  <script src="app.js?v=20261116-pawn-redemption"></script>
 </body>
 </html>

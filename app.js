@@ -22,7 +22,7 @@ const TRANSACTION_TYPES = [
 
 const HP_SERVICE_TYPES = new Set(["Jual Beli HP", "Service HP", "Aksesoris", "Service / JB HP"]);
 const QUICK_ACTION_TYPES = TRANSACTION_TYPES.filter((type) =>
-  !HP_SERVICE_TYPES.has(type) && type !== "Transfer Bank" && type !== "Setor Tunai"
+  !HP_SERVICE_TYPES.has(type) && type !== "Transfer Bank" && type !== "Setor Tunai" && type !== "Tebus Gadai"
 );
 
 const ACCOUNT_DEFAULTS = [
@@ -77,6 +77,12 @@ const el = {
   sellInput: document.querySelector("#sellInput"),
   typeField: document.querySelector("#typeField"),
   bankTabs: document.querySelector("#bankTabs"),
+  pawnTabs: document.querySelector("#pawnTabs"),
+  pawnSelectionField: document.querySelector("#pawnSelectionField"),
+  pawnSelectionInput: document.querySelector("#pawnSelectionInput"),
+  pawnEmptyNotice: document.querySelector("#pawnEmptyNotice"),
+  redemptionAmountField: document.querySelector("#redemptionAmountField"),
+  redemptionAmountInput: document.querySelector("#redemptionAmountInput"),
   accountInput: document.querySelector("#accountInput"),
   accountField: document.querySelector("#accountField"),
   accountFieldLabel: document.querySelector("#accountField span"),
@@ -228,6 +234,7 @@ function bindEvents() {
     resetForm();
     el.transactionForm.dataset.fixedType = "true";
     el.typeInput.value = button.dataset.type === "Bank" ? "Transfer Bank" : button.dataset.type;
+    el.transactionForm.dataset.pawnMode = "new";
     refreshTransactionAccountOptions();
     updateTransactionFormLabels();
     navigate("transaction");
@@ -239,6 +246,18 @@ function bindEvents() {
     el.typeInput.value = button.dataset.bankType;
     updateTransactionFormLabels();
   });
+
+  el.pawnTabs.addEventListener("click", (event) => {
+    const button = event.target.closest("button[data-pawn-mode]");
+    if (!button || el.transactionId.value) return;
+    el.transactionForm.dataset.pawnMode = button.dataset.pawnMode;
+    el.pawnSelectionInput.value = "";
+    el.costInput.value = "";
+    el.descriptionInput.value = "";
+    el.redemptionAmountInput.value = "";
+    updateTransactionFormLabels();
+  });
+  el.pawnSelectionInput.addEventListener("change", updateSelectedPawn);
 
   el.transactionForm.addEventListener("submit", saveTransaction);
   el.dashboardAccounts.addEventListener("click", openAccountBalanceDialog);
@@ -255,7 +274,7 @@ function bindEvents() {
   el.dailyBalanceDate.addEventListener("change", renderDailyBalanceInputs);
   el.cancelEditButton.addEventListener("click", resetForm);
   el.typeInput.addEventListener("change", updateTransactionFormLabels);
-  [el.costInput, el.sellInput].forEach((input) => {
+  [el.costInput, el.sellInput, el.redemptionAmountInput].forEach((input) => {
     input.addEventListener("input", () => {
       formatAmountInput(input);
       renderPreview();
@@ -338,6 +357,10 @@ function saveTransaction(event) {
   event.preventDefault();
 
   const type = el.typeInput.value;
+  if (type === "Gadai HP") {
+    savePawnTransaction();
+    return;
+  }
   if (isHpServiceType(type)) {
     saveHpTransaction();
     return;
@@ -386,6 +409,58 @@ function saveTransaction(event) {
     createdAt: el.transactionId.value ? getExistingCreatedAt(el.transactionId.value) : new Date().toISOString()
   };
 
+  saveTransactionRecord(transaction);
+}
+
+function savePawnTransaction() {
+  const isRedemption = el.transactionForm.dataset.pawnMode === "redeem";
+  const selectedAccountId = el.accountInput.value;
+  const id = el.transactionId.value || crypto.randomUUID();
+  const createdAt = el.transactionId.value ? getExistingCreatedAt(el.transactionId.value) : new Date().toISOString();
+  let transaction;
+
+  if (isRedemption) {
+    const pawn = state.transactions.find((item) => item.id === el.pawnSelectionInput.value && item.type === "Gadai HP" && item.pawnAction !== "redeem");
+    if (!pawn || !getActivePawnTransactions(id).some((item) => item.id === pawn.id)) {
+      alert("Pilih data gadai aktif yang valid.");
+      return;
+    }
+    const redemptionAmount = parseAmount(el.redemptionAmountInput.value);
+    transaction = {
+      id,
+      type: "Gadai HP",
+      pawnAction: "redeem",
+      relatedPawnId: pawn.id,
+      date: el.dateInput.value,
+      description: `Tebus Gadai: ${pawn.description || pawn.id}`,
+      cost: Number(pawn.cost) || 0,
+      sell: redemptionAmount,
+      fee: null,
+      expense: false,
+      accountId: selectedAccountId,
+      sourceAccountId: null,
+      destinationAccountId: selectedAccountId,
+      movements: [{ accountId: selectedAccountId, amount: redemptionAmount }],
+      createdAt
+    };
+  } else {
+    const cost = parseAmount(el.costInput.value);
+    transaction = {
+      id,
+      type: "Gadai HP",
+      date: el.dateInput.value,
+      description: el.descriptionInput.value.trim(),
+      cost,
+      sell: 0,
+      fee: null,
+      expense: false,
+      accountId: selectedAccountId,
+      sourceAccountId: selectedAccountId,
+      destinationAccountId: null,
+      movements: [{ accountId: selectedAccountId, amount: -cost }],
+      createdAt
+    };
+  }
   saveTransactionRecord(transaction);
 }
 
@@ -497,15 +572,20 @@ function editTransaction(transaction) {
   el.transactionForm.dataset.fixedType = "false";
   el.transactionId.value = transaction.id;
   el.typeInput.value = transaction.type;
+  el.transactionForm.dataset.pawnMode = transaction.pawnAction === "redeem" ? "redeem" : "new";
   refreshTransactionAccountOptions();
   el.dateInput.value = transaction.date;
   el.descriptionInput.value = transaction.description || "";
   el.costInput.value = formatAmount(transaction.cost);
   el.sellInput.value = formatAmount(getEditableSellValue(transaction));
+  el.redemptionAmountInput.value = transaction.pawnAction === "redeem" ? formatAmount(transaction.sell) : "";
   el.accountInput.value = transaction.accountId;
   el.formTitle.textContent = "Edit Transaksi";
   el.saveButton.textContent = "Simpan Perubahan";
   el.cancelEditButton.hidden = false;
+  if (transaction.pawnAction === "redeem") {
+    renderPawnSelection(transaction.relatedPawnId, transaction.id);
+  }
   updateTransactionFormLabels();
   navigate("transaction");
 }
@@ -523,12 +603,49 @@ function getEditableSellValue(transaction) {
 function resetForm() {
   el.transactionForm.reset();
   el.transactionForm.dataset.fixedType = "false";
+  el.transactionForm.dataset.pawnMode = "new";
   el.transactionId.value = "";
+  el.redemptionAmountInput.value = "";
   el.dateInput.value = todayISO();
   el.formTitle.textContent = "Tambah Transaksi";
   el.saveButton.textContent = "Simpan Transaksi";
   el.cancelEditButton.hidden = true;
   updateTransactionFormLabels();
+}
+
+function getActivePawnTransactions(editingRedemptionId = "") {
+  const redeemedPawnIds = new Set(state.transactions
+    .filter((transaction) => transaction.type === "Gadai HP" &&
+      transaction.pawnAction === "redeem" &&
+      transaction.id !== editingRedemptionId)
+    .map((transaction) => transaction.relatedPawnId));
+  return getSortedTransactions().filter((transaction) =>
+    transaction.type === "Gadai HP" &&
+    transaction.pawnAction !== "redeem" &&
+    !redeemedPawnIds.has(transaction.id)
+  );
+}
+
+function renderPawnSelection(selectedId = "", editingRedemptionId = "") {
+  const activePawns = getActivePawnTransactions(editingRedemptionId);
+  el.pawnSelectionInput.replaceChildren(new Option("Pilih gadai aktif", ""));
+  activePawns.forEach((pawn) => {
+    const option = new Option(
+      `${pawn.description || "Gadai HP"} · ${formatDate(pawn.date)} · ${money(pawn.cost)}`,
+      pawn.id
+    );
+    el.pawnSelectionInput.add(option);
+  });
+  el.pawnSelectionInput.value = activePawns.some((pawn) => pawn.id === selectedId) ? selectedId : "";
+  el.pawnEmptyNotice.hidden = activePawns.length > 0;
+  el.pawnSelectionInput.required = true;
+}
+
+function updateSelectedPawn() {
+  const pawn = state.transactions.find((transaction) => transaction.id === el.pawnSelectionInput.value);
+  el.costInput.value = pawn ? formatAmount(pawn.cost) : "";
+  el.descriptionInput.value = pawn ? `Tebus Gadai: ${pawn.description || pawn.id}` : "";
+  renderPreview();
 }
 
 function updateTransactionFormLabels() {
@@ -542,12 +659,34 @@ function updateTransactionFormLabels() {
   const isCashDeposit = type === "Setor Tunai";
   const isBankTransfer = type === "Transfer Bank";
   const isPawn = type === "Gadai HP";
+  const isPawnRedemption = isPawn && el.transactionForm.dataset.pawnMode === "redeem";
   const hideSell = isExpense || isCashDeposit || isPawn;
   if (!el.transactionId.value) {
     el.formTitle.textContent = isCashDeposit || isBankTransfer ? "Transaksi Bank" : isHpService ? "Transaksi HP & Service" : "Tambah Transaksi";
   }
   el.typeField.hidden = isBankTransfer || isCashDeposit || el.transactionForm.dataset.fixedType === "true";
   el.bankTabs.hidden = !isBankTransfer && !isCashDeposit;
+  el.pawnTabs.hidden = !isPawn;
+  el.pawnTabs.querySelectorAll("[data-pawn-mode]").forEach((button) => {
+    const selected = button.dataset.pawnMode === el.transactionForm.dataset.pawnMode;
+    button.classList.toggle("active", selected);
+    button.setAttribute("aria-selected", String(selected));
+    button.disabled = Boolean(el.transactionId.value);
+  });
+  el.pawnSelectionField.hidden = !isPawnRedemption;
+  el.pawnSelectionInput.required = isPawnRedemption;
+  el.redemptionAmountField.hidden = !isPawnRedemption;
+  el.redemptionAmountInput.disabled = !isPawnRedemption;
+  el.redemptionAmountInput.required = isPawnRedemption;
+  if (isPawnRedemption) {
+    renderPawnSelection(el.pawnSelectionInput.value, el.transactionId.value);
+    const selectedPawn = state.transactions.find((item) => item.id === el.pawnSelectionInput.value);
+    el.costInput.value = selectedPawn ? formatAmount(selectedPawn.cost) : "";
+    el.descriptionInput.value = selectedPawn ? `Tebus Gadai: ${selectedPawn.description || selectedPawn.id}` : "";
+  }
+  el.costInput.readOnly = isPawnRedemption;
+  el.descriptionInput.closest("label").hidden = isPawnRedemption;
+  el.descriptionInput.disabled = isPawnRedemption;
   el.bankTabs.querySelectorAll("[data-bank-type]").forEach((button) => {
     const selected = button.dataset.bankType === type;
     button.classList.toggle("active", selected);
@@ -555,7 +694,7 @@ function updateTransactionFormLabels() {
   });
   el.costField.textContent = isPawn ? "Nominal Gadai" : isExpense ? "Nominal Belanja" : isCashWithdraw ? "Nominal Tarik Tunai" : isCashDeposit ? "Nominal Setor Tunai" : isBankTransfer ? "Modal / Nominal Keluar" : isHpService ? "Modal" : isTopUpTransaction ? "Modal (keluar bank)" : "Modal / Nominal Keluar";
   el.sellField.textContent = isPawn ? "Profit Gadai HP (Rp0)" : isExpense ? "Uang Masuk" : isCashWithdraw ? "Fee" : isCashDeposit ? "Uang Masuk Bank" : isHpService || isBankTransfer ? "Harga Jual / Fee" : isTopUpTransaction ? "Harga Jual (masuk Cash)" : "Harga Jual / Fee";
-  el.accountFieldLabel.textContent = isHpService ? "Metode Pembayaran" : isDanaTopUp ? "Akun Sumber (SeaBank)" : isTopUpTransaction || isBankTransfer ? "Akun Bank Sumber" : isCashDeposit ? "Akun Bank Tujuan" : isCashWithdraw ? "Akun Bank Tujuan" : isExpense ? "Akun Pembayaran" : isPawn ? "Sumber Dana" : "Akun";
+  el.accountFieldLabel.textContent = isPawnRedemption ? "Akun Penerima Uang" : isHpService ? "Metode Pembayaran" : isDanaTopUp ? "Akun Sumber (SeaBank)" : isTopUpTransaction || isBankTransfer ? "Akun Bank Sumber" : isCashDeposit || isCashWithdraw ? "Akun Bank Tujuan" : isExpense ? "Akun Pembayaran" : isPawn ? "Akun Sumber Dana" : "Akun";
   el.adminFeeNotice.hidden = !isDanaTopUp;
   el.sellInput.placeholder = isCashWithdraw ? "Contoh: Rp5.000" : "Rp0";
   const sellLabel = el.sellInput.closest("label");
@@ -567,6 +706,10 @@ function updateTransactionFormLabels() {
 }
 
 function renderPreview() {
+  if (el.typeInput.value === "Gadai HP") {
+    renderPawnPreview();
+    return;
+  }
   if (isHpServiceType(el.typeInput.value)) {
     renderHpPreview();
     return;
@@ -583,6 +726,19 @@ function renderPreview() {
   const outgoing = isTopUpTransaction ? cost + (isDanaTopUp ? DANA_ADMIN_FEE : 0) : cost;
   const incoming = isExpense || isPawn ? 0 : isCashWithdraw ? cost + sell : isCashDeposit ? cost : sell;
   const profit = isExpense || isCashDeposit || isPawn ? 0 : isCashWithdraw ? sell : sell - cost;
+  el.previewOut.textContent = money(outgoing);
+  el.previewIn.textContent = money(incoming);
+  el.previewProfit.textContent = money(profit);
+  el.previewProfit.className = profit < 0 ? "profit-negative" : "profit-positive";
+}
+
+function renderPawnPreview() {
+  const isRedemption = el.transactionForm.dataset.pawnMode === "redeem";
+  const cost = parseAmount(el.costInput.value);
+  const sell = parseAmount(el.redemptionAmountInput.value);
+  const outgoing = isRedemption ? 0 : cost;
+  const incoming = isRedemption ? sell : 0;
+  const profit = isRedemption ? sell - cost : 0;
   el.previewOut.textContent = money(outgoing);
   el.previewIn.textContent = money(incoming);
   el.previewProfit.textContent = money(profit);
@@ -924,7 +1080,10 @@ function getSortedTransactions() {
 }
 
 function getProfit(transaction) {
-  if (transaction.type === "Gadai HP" || transaction.type === "Setor Tunai") return 0;
+  if (transaction.type === "Gadai HP") {
+    return transaction.pawnAction === "redeem" ? (Number(transaction.sell) || 0) - (Number(transaction.cost) || 0) : 0;
+  }
+  if (transaction.type === "Setor Tunai") return 0;
   if (transaction.type === "Tarik Tunai") {
     return transaction.fee ?? transaction.sell - transaction.cost;
   }
@@ -943,8 +1102,13 @@ function sumDashboardProfit(transactions) {
 }
 
 function sumPawnNominal(transactions) {
+  const redeemedPawnIds = new Set(transactions
+    .filter((transaction) => transaction.type === "Gadai HP" && transaction.pawnAction === "redeem")
+    .map((transaction) => transaction.relatedPawnId));
   return transactions
-    .filter((transaction) => transaction.type === "Gadai HP")
+    .filter((transaction) => transaction.type === "Gadai HP" &&
+      transaction.pawnAction !== "redeem" &&
+      !redeemedPawnIds.has(transaction.id))
     .reduce((sum, transaction) => sum + (Number(transaction.cost) || 0), 0);
 }
 
