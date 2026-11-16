@@ -378,6 +378,80 @@ h2 {
   line-height: 1.5;
 }
 
+.transaction-confirm-dialog {
+  width: min(94vw, 460px);
+  max-height: min(88vh, 720px);
+  overflow-y: auto;
+  padding: 20px;
+  border: 1px solid var(--line);
+  border-radius: 20px;
+  color: var(--ink);
+  box-shadow: 0 24px 70px rgba(12, 61, 126, 0.25);
+}
+
+.transaction-confirm-dialog::backdrop {
+  background: rgba(15, 31, 56, 0.55);
+  backdrop-filter: blur(3px);
+}
+
+.transaction-confirm-content {
+  display: grid;
+  gap: 12px;
+}
+
+.transaction-confirm-content h2,
+.transaction-confirm-content p {
+  margin: 0;
+}
+
+.transaction-confirm-type {
+  color: var(--blue-900);
+  font-size: 1rem;
+}
+
+.transaction-confirm-summary {
+  display: grid;
+  gap: 7px;
+  padding: 12px;
+  border-radius: 14px;
+  background: var(--blue-050);
+  font-size: 0.88rem;
+  font-weight: 650;
+}
+
+.transaction-confirm-money-flow {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  font-size: 0.86rem;
+  font-weight: 700;
+  list-style: none;
+}
+
+.transaction-confirm-warning,
+.transaction-validation-message {
+  padding: 11px 12px;
+  border: 1px solid #f1d395;
+  border-radius: 13px;
+  background: #fff8e8;
+  color: #704900;
+  font-size: 0.84rem;
+  font-weight: 700;
+  line-height: 1.5;
+  white-space: pre-line;
+}
+
+.transaction-confirm-warning.transaction-warning-negative {
+  border-color: #efb4bc;
+  background: #fff0f2;
+  color: #9e1d30;
+}
+
+.transaction-confirm-warning.transaction-warning-zero {
+  border-color: #f1d395;
+}
+
 .balance-dialog-actions {
   display: grid;
   grid-template-columns: 1fr 1fr;

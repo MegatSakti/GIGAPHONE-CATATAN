@@ -83,6 +83,16 @@ const el = {
   pawnEmptyNotice: document.querySelector("#pawnEmptyNotice"),
   redemptionAmountField: document.querySelector("#redemptionAmountField"),
   redemptionAmountInput: document.querySelector("#redemptionAmountInput"),
+  transactionValidationMessage: document.querySelector("#transactionValidationMessage"),
+  transactionConfirmDialog: document.querySelector("#transactionConfirmDialog"),
+  confirmTransactionType: document.querySelector("#confirmTransactionType"),
+  confirmTransactionCost: document.querySelector("#confirmTransactionCost"),
+  confirmTransactionSell: document.querySelector("#confirmTransactionSell"),
+  confirmTransactionProfit: document.querySelector("#confirmTransactionProfit"),
+  confirmTransactionMoneyFlow: document.querySelector("#confirmTransactionMoneyFlow"),
+  confirmTransactionWarning: document.querySelector("#confirmTransactionWarning"),
+  cancelTransactionConfirm: document.querySelector("#cancelTransactionConfirm"),
+  acceptTransactionConfirm: document.querySelector("#acceptTransactionConfirm"),
   accountInput: document.querySelector("#accountInput"),
   accountField: document.querySelector("#accountField"),
   accountFieldLabel: document.querySelector("#accountField span"),
@@ -119,6 +129,8 @@ const el = {
   dailyRolloverSetup: document.querySelector("#dailyRolloverSetup"),
   dailyRolloverClose: document.querySelector("#dailyRolloverClose")
 };
+
+let pendingTransaction = null;
 
 init();
 
@@ -258,6 +270,17 @@ function bindEvents() {
     updateTransactionFormLabels();
   });
   el.pawnSelectionInput.addEventListener("change", updateSelectedPawn);
+  el.cancelTransactionConfirm.addEventListener("click", () => el.transactionConfirmDialog.close());
+  el.acceptTransactionConfirm.addEventListener("click", () => {
+    if (!pendingTransaction) return;
+    const transaction = pendingTransaction;
+    pendingTransaction = null;
+    el.transactionConfirmDialog.close();
+    saveTransactionRecord(transaction);
+  });
+  el.transactionConfirmDialog.addEventListener("close", () => {
+    pendingTransaction = null;
+  });
 
   el.transactionForm.addEventListener("submit", saveTransaction);
   el.dashboardAccounts.addEventListener("click", openAccountBalanceDialog);
@@ -276,6 +299,7 @@ function bindEvents() {
   el.typeInput.addEventListener("change", updateTransactionFormLabels);
   [el.costInput, el.sellInput, el.redemptionAmountInput].forEach((input) => {
     input.addEventListener("input", () => {
+      el.transactionValidationMessage.hidden = true;
       formatAmountInput(input);
       renderPreview();
     });
@@ -378,8 +402,8 @@ function saveTransaction(event) {
   const moneyIn = isExpense || isPawn ? 0 : isCashWithdraw ? cost + sellRaw : isCashDeposit ? cost : sellRaw;
   const selectedAccountId = isDanaTopUp ? "seabank" : el.accountInput.value;
   const cashId = state.accounts.find((account) => account.id === "cash")?.id || "cash";
-  const sourceAccountId = isTopUpTransaction || isBankTransfer ? selectedAccountId : isCashWithdraw || isCashDeposit ? cashId : selectedAccountId;
-  const destinationAccountId = isTopUpTransaction || isBankTransfer ? cashId : selectedAccountId;
+  const sourceAccountId = isTopUpTransaction || isBankTransfer || isCashWithdraw ? selectedAccountId : isCashDeposit ? cashId : selectedAccountId;
+  const destinationAccountId = isTopUpTransaction || isBankTransfer || isCashWithdraw ? cashId : selectedAccountId;
   const movements = isTopUpTransaction
     ? [{ accountId: sourceAccountId, amount: -(cost + (isDanaTopUp ? DANA_ADMIN_FEE : 0)) }, { accountId: destinationAccountId, amount: sellRaw }]
     : isBankTransfer
@@ -409,7 +433,7 @@ function saveTransaction(event) {
     createdAt: el.transactionId.value ? getExistingCreatedAt(el.transactionId.value) : new Date().toISOString()
   };
 
-  saveTransactionRecord(transaction);
+  confirmTransactionBeforeSave(transaction);
 }
 
 function savePawnTransaction() {
@@ -461,7 +485,7 @@ function savePawnTransaction() {
       createdAt
     };
   }
-  saveTransactionRecord(transaction);
+  confirmTransactionBeforeSave(transaction);
 }
 
 function saveHpTransaction() {
@@ -486,7 +510,137 @@ function saveHpTransaction() {
       : [{ accountId, amount: -cost }, { accountId, amount: sell }],
     createdAt: el.transactionId.value ? getExistingCreatedAt(el.transactionId.value) : new Date().toISOString()
   };
-  saveTransactionRecord(transaction);
+  confirmTransactionBeforeSave(transaction);
+}
+
+function getTransactionMoneyFlow(transaction) {
+  const accountId = transaction.accountId;
+  const cashId = state.accounts.find((account) => account.id === "cash")?.id || "cash";
+  let sourceAccountId = null;
+  let destinationAccountId = null;
+  let sourceLabel = "Sumber dana";
+  let destinationLabel = "Penerimaan dana";
+
+  if (transaction.type === "Belanja Kebutuhan") {
+    sourceAccountId = accountId;
+  } else if (transaction.type === "Gadai HP") {
+    if (transaction.pawnAction === "redeem") {
+      destinationAccountId = transaction.destinationAccountId || accountId;
+    } else {
+      sourceAccountId = transaction.sourceAccountId || accountId;
+      sourceLabel = "Sumber dana gadai";
+    }
+  } else if (transaction.type === "Setor Tunai") {
+    sourceAccountId = cashId;
+    destinationAccountId = transaction.destinationAccountId || accountId;
+  } else if (transaction.type === "Tarik Tunai") {
+    sourceAccountId = transaction.sourceAccountId || accountId;
+    destinationAccountId = cashId;
+  } else if (isTopUp(transaction.type)) {
+    sourceAccountId = transaction.sourceAccountId || accountId;
+    destinationAccountId = transaction.destinationAccountId || cashId;
+  } else if (isHpServiceType(transaction.type)) {
+    sourceAccountId = transaction.sourceAccountId || accountId;
+    destinationAccountId = transaction.destinationAccountId || accountId;
+    sourceLabel = "Sumber dana modal";
+    destinationLabel = "Penerimaan dana harga jual";
+  } else {
+    const movements = getAccountMovements(transaction);
+    sourceAccountId = movements.find((movement) => movement.amount < 0)?.accountId || transaction.sourceAccountId || accountId;
+    destinationAccountId = movements.find((movement) => movement.amount > 0)?.accountId || transaction.destinationAccountId || accountId;
+  }
+
+  return {
+    source: sourceAccountId ? `${sourceLabel}: ${getAccountName(sourceAccountId)}` : "",
+    destination: destinationAccountId ? `${destinationLabel}: ${getAccountName(destinationAccountId)}` : ""
+  };
+}
+
+function getTransactionWarning(transaction) {
+  const excludedTypes = new Set(["Belanja Kebutuhan", "Gadai HP", "Setor Tunai", "Tarik Tunai"]);
+  if (excludedTypes.has(transaction.type)) return null;
+
+  const profit = (Number(transaction.sell) || 0) - (Number(transaction.cost) || 0);
+  if (profit < 0) {
+    return {
+      type: "negative",
+      message: `PERINGATAN: Harga jual lebih kecil dari modal.\nTransaksi ini akan menghasilkan profit minus sebesar ${money(Math.abs(profit))}.\nApakah tetap ingin menyimpan?`
+    };
+  }
+  if (profit === 0) {
+    return {
+      type: "zero",
+      message: "Profit transaksi ini Rp0. Pastikan harga jual sudah benar."
+    };
+  }
+  return null;
+}
+
+function validateTransactionInput(transaction) {
+  const excludedPriceTypes = new Set(["Belanja Kebutuhan", "Gadai HP", "Setor Tunai", "Tarik Tunai"]);
+  const requiresPrice = !excludedPriceTypes.has(transaction.type);
+  const rawPrice = transaction.pawnAction === "redeem" ? el.redemptionAmountInput.value : el.sellInput.value;
+  const hasValidPrice = /\d/.test(String(rawPrice || "")) && Number(transaction.sell) > 0;
+
+  if (requiresPrice && !hasValidPrice) {
+    el.transactionValidationMessage.textContent = "Harga jual wajib diisi dengan benar.";
+    el.transactionValidationMessage.hidden = false;
+    (transaction.pawnAction === "redeem" ? el.redemptionAmountInput : el.sellInput).focus();
+    return false;
+  }
+
+  if (transaction.pawnAction === "redeem" && (!Number.isFinite(Number(transaction.sell)) || Number(transaction.sell) <= 0)) {
+    el.transactionValidationMessage.textContent = "Nominal tebus wajib diisi dengan benar.";
+    el.transactionValidationMessage.hidden = false;
+    el.redemptionAmountInput.focus();
+    return false;
+  }
+
+  const accountIds = [transaction.accountId, transaction.sourceAccountId, transaction.destinationAccountId]
+    .filter(Boolean);
+  const missingAccount = accountIds.find((id) => !state.accounts.some((account) => account.id === id));
+  if (missingAccount) {
+    el.transactionValidationMessage.textContent = "Akun transaksi tidak valid. Pilih akun yang tersedia.";
+    el.transactionValidationMessage.hidden = false;
+    return false;
+  }
+
+  el.transactionValidationMessage.hidden = true;
+  return true;
+}
+
+function confirmTransactionBeforeSave(transaction) {
+  if (!validateTransactionInput(transaction)) return;
+
+  const flow = getTransactionMoneyFlow(transaction);
+  const warning = getTransactionWarning(transaction);
+  const isExpense = transaction.type === "Belanja Kebutuhan";
+  const isPawnNew = transaction.type === "Gadai HP" && transaction.pawnAction !== "redeem";
+  const isHpService = isHpServiceType(transaction.type);
+  const movementTotals = getMovementTotals(transaction);
+  const nominalOut = isHpService || isPawnNew || isExpense
+    ? Number(transaction.cost) || 0
+    : movementTotals.out;
+  const nominalIn = movementTotals.in;
+
+  el.confirmTransactionType.textContent = transaction.pawnAction === "redeem" ? "Tebus Gadai HP" : transaction.type;
+  el.confirmTransactionCost.textContent = `${isPawnNew ? "Nominal gadai" : "Modal / nominal keluar"}: ${money(nominalOut)}`;
+  el.confirmTransactionSell.textContent = `Harga jual / uang masuk: ${money(nominalIn)}`;
+  el.confirmTransactionProfit.textContent = `Profit: ${money(getProfit(transaction))}`;
+  el.confirmTransactionMoneyFlow.replaceChildren();
+  [flow.source, flow.destination].filter(Boolean).forEach((line) => {
+    const item = document.createElement("li");
+    item.textContent = line;
+    el.confirmTransactionMoneyFlow.append(item);
+  });
+  el.confirmTransactionWarning.textContent = warning?.message || "";
+  el.confirmTransactionWarning.hidden = !warning;
+  el.confirmTransactionWarning.classList.toggle("transaction-warning-negative", warning?.type === "negative");
+  el.confirmTransactionWarning.classList.toggle("transaction-warning-zero", warning?.type === "zero");
+  el.acceptTransactionConfirm.textContent = warning?.type === "negative" ? "Tetap Simpan" : "Simpan Transaksi";
+
+  pendingTransaction = transaction;
+  el.transactionConfirmDialog.showModal();
 }
 
 function saveTransactionRecord(transaction) {
@@ -606,6 +760,7 @@ function resetForm() {
   el.transactionForm.dataset.pawnMode = "new";
   el.transactionId.value = "";
   el.redemptionAmountInput.value = "";
+  el.transactionValidationMessage.hidden = true;
   el.dateInput.value = todayISO();
   el.formTitle.textContent = "Tambah Transaksi";
   el.saveButton.textContent = "Simpan Transaksi";
@@ -700,7 +855,7 @@ function updateTransactionFormLabels() {
   const sellLabel = el.sellInput.closest("label");
   sellLabel.hidden = hideSell;
   el.sellInput.disabled = hideSell;
-  el.sellInput.required = !hideSell;
+  el.sellInput.required = isCashWithdraw;
   if (hideSell) el.sellInput.value = "";
   renderPreview();
 }

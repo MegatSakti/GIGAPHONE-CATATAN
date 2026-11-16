@@ -199,6 +199,7 @@
                 <strong id="previewProfit">Rp0</strong>
               </div>
             </div>
+            <p class="transaction-validation-message" id="transactionValidationMessage" role="alert" hidden></p>
 
             <label id="accountField">
               <span>Akun</span>
@@ -323,10 +324,28 @@
     </form>
   </dialog>
 
+  <dialog class="transaction-confirm-dialog" id="transactionConfirmDialog" aria-labelledby="confirmTransactionTitle">
+    <div class="transaction-confirm-content">
+      <h2 id="confirmTransactionTitle">Konfirmasi Transaksi</h2>
+      <strong class="transaction-confirm-type" id="confirmTransactionType"></strong>
+      <div class="transaction-confirm-summary">
+        <p id="confirmTransactionCost"></p>
+        <p id="confirmTransactionSell"></p>
+        <p id="confirmTransactionProfit"></p>
+      </div>
+      <ul class="transaction-confirm-money-flow" id="confirmTransactionMoneyFlow"></ul>
+      <p class="transaction-confirm-warning" id="confirmTransactionWarning" role="alert" hidden></p>
+      <div class="balance-dialog-actions">
+        <button class="secondary-button" id="cancelTransactionConfirm" type="button">Batal</button>
+        <button class="primary-button" id="acceptTransactionConfirm" type="button">Simpan Transaksi</button>
+      </div>
+    </div>
+  </dialog>
+
   <template id="emptyTemplate">
     <div class="empty-state">Belum ada data.</div>
   </template>
 
-  <script src="app.js?v=20261116-pawn-redemption"></script>
+  <script src="app.js?v=20261116-transaction-confirmation"></script>
 </body>
 </html>
