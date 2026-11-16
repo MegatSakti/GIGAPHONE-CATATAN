@@ -918,11 +918,8 @@ function updateSelectedPawn() {
 function configureTopUpFeeForType(type) {
   const previousType = el.transactionForm.dataset.configuredType || "";
   if (type !== previousType) {
-    if (isFeeTopUp(previousType)) {
+    if (isFeeTopUp(previousType) || isFeeTopUp(type)) {
       el.sellInput.value = "";
-    }
-    if (isFeeTopUp(type)) {
-      el.sellInput.value = formatAmount(getDefaultTopUpFee(type));
     }
     el.transactionForm.dataset.configuredType = type;
   }
@@ -935,7 +932,6 @@ function updateTransactionFormLabels() {
   const isHpService = isHpServiceType(type);
   const isCashWithdraw = el.typeInput.value === "Tarik Tunai";
   const isTopUpTransaction = isTopUp(type);
-  const isDanaTopUp = type === "Top Up DANA";
   const isFeeTopUpTransaction = isFeeTopUp(type);
   const isExpense = type === "Belanja Kebutuhan";
   const isCashDeposit = type === "Setor Tunai";
@@ -977,10 +973,7 @@ function updateTransactionFormLabels() {
   el.costField.textContent = isPawn ? "Nominal Gadai" : isExpense ? "Nominal Belanja" : isCashWithdraw ? "Nominal Tarik Tunai" : isCashDeposit ? "Nominal Setor Tunai" : isFeeTopUpTransaction ? "Nominal Top Up" : isBankTransfer ? "Modal / Nominal Keluar" : isHpService ? "Modal" : isTopUpTransaction ? "Modal (keluar bank)" : "Modal / Nominal Keluar";
   el.sellField.textContent = isPawn ? "Profit Gadai HP (Rp0)" : isExpense ? "Uang Masuk" : isCashWithdraw ? "Fee/Admin" : isFeeTopUpTransaction ? "Fee pelanggan (menambah Cash)" : isCashDeposit ? "Uang Masuk Bank" : isHpService || isBankTransfer ? "Harga Jual / Fee" : isTopUpTransaction ? "Harga Jual (masuk Cash)" : "Harga Jual / Fee";
   el.accountFieldLabel.textContent = isPawnRedemption ? "Akun Penerima Uang" : isHpService ? "Metode Pembayaran" : isFeeTopUpTransaction || isTopUpTransaction || isBankTransfer ? "Sumber Dana Bank" : isCashDeposit ? "Akun Bank Tujuan" : isCashWithdraw ? "Akun Bank Penerima" : isExpense ? "Akun Pembayaran" : isPawn ? "Akun Sumber Dana" : "Akun";
-  el.adminFeeNotice.textContent = isDanaTopUp
-    ? `Default Admin DANA ${money(DANA_ADMIN_FEE)} dipotong dari bank. Fee pelanggan menambah Cash.`
-    : `Default Admin GoPay ${money(GOPAY_ADMIN_FEE)} dipotong dari bank. Fee pelanggan menambah Cash.`;
-  el.adminFeeNotice.hidden = !isFeeTopUpTransaction;
+  el.adminFeeNotice.hidden = true;
   el.sellInput.placeholder = isCashWithdraw || isFeeTopUpTransaction ? "Contoh: Rp1.000" : "Rp0";
   const sellLabel = el.sellInput.closest("label");
   sellLabel.hidden = hideSell;
@@ -1008,8 +1001,8 @@ function renderPreview() {
   const isFeeTopUpTransaction = isFeeTopUp(el.typeInput.value);
   const isPawn = el.typeInput.value === "Gadai HP";
   const outgoing = isFeeTopUpTransaction ? cost + getDefaultTopUpFee(el.typeInput.value) : cost;
-  const incoming = isExpense || isPawn ? 0 : isCashWithdraw ? cost + sell : isCashDeposit ? cost : isFeeTopUpTransaction ? cost : sell;
-  const profit = isExpense || isCashDeposit || isPawn || isFeeTopUpTransaction ? 0 : isCashWithdraw ? sell : sell - cost;
+  const incoming = isExpense || isPawn ? 0 : isCashWithdraw ? cost + sell : isCashDeposit ? cost : isFeeTopUpTransaction ? cost + sell : sell;
+  const profit = isExpense || isCashDeposit || isPawn ? 0 : isCashWithdraw ? sell : isFeeTopUpTransaction ? sell : sell - cost;
   el.previewOut.textContent = money(outgoing);
   el.previewIn.textContent = money(incoming);
   el.previewProfit.textContent = money(profit);
