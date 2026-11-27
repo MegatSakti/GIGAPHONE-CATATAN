@@ -65,7 +65,6 @@ const el = {
   dashboardNoteInput: document.querySelector("#dashboardNoteInput"),
   quickActions: document.querySelector("#quickActions"),
   hpServiceActions: document.querySelector("#hpServiceActions"),
-  hpServiceTransactions: document.querySelector("#hpServiceTransactions"),
   hpServiceTodayProfit: document.querySelector("#hpServiceTodayProfit"),
   hpServiceTotalProfit: document.querySelector("#hpServiceTotalProfit"),
   mandiriAccount: document.querySelector("#mandiriAccount"),
@@ -355,7 +354,6 @@ function bindEvents() {
   });
 
   el.historyList.addEventListener("click", handleHistoryAction);
-  el.hpServiceTransactions.addEventListener("click", handleHistoryAction);
   el.mandiriTransactions.addEventListener("click", handleHistoryAction);
   el.exportButton.addEventListener("click", exportBackup);
   el.importInput.addEventListener("change", importBackup);
@@ -659,7 +657,7 @@ function validateTransactionInput(transaction) {
   }
 
   const excludedPriceTypes = new Set(["Belanja Kebutuhan", "Gadai HP", "Setor Tunai", "Tarik Tunai", "Top Up DANA", "Top Up GoPay"]);
-  const requiresPrice = !excludedPriceTypes.has(transaction.type);
+  const requiresPrice = !excludedPriceTypes.has(transaction.type) && !isHpServiceType(transaction.type);
   const rawPrice = transaction.pawnAction === "redeem" ? el.redemptionAmountInput.value : el.sellInput.value;
   const hasValidPrice = /\d/.test(String(rawPrice || "")) && Number(transaction.sell) > 0;
 
@@ -1125,8 +1123,80 @@ function renderHpService() {
   const mandiriTransactions = getSortedTransactions().filter((transaction) =>
     getAccountMovements(transaction).some((movement) => movement.accountId === "mandiri")
   );
-  renderTransactionList(el.hpServiceTransactions, hpServiceTransactions, { actions: true });
-  renderTransactionList(el.mandiriTransactions, mandiriTransactions, { actions: true });
+  renderMandiriLedger(el.mandiriTransactions, mandiriTransactions);
+}
+
+function renderMandiriLedger(container, transactions) {
+  if (!transactions.length) {
+    container.innerHTML = document.querySelector("#emptyTemplate").innerHTML;
+    return;
+  }
+
+  const table = document.createElement("table");
+  table.className = "mandiri-ledger-table";
+  table.setAttribute("aria-label", "Mutasi Bank Mandiri");
+
+  const header = document.createElement("thead");
+  const headerRow = document.createElement("tr");
+  ["Tanggal", "Jenis", "Keterangan", "Keluar", "Masuk", "Aksi"].forEach((label) => {
+    const cell = document.createElement("th");
+    cell.scope = "col";
+    cell.textContent = label;
+    headerRow.append(cell);
+  });
+  header.append(headerRow);
+  table.append(header);
+
+  const body = document.createElement("tbody");
+  transactions.forEach((transaction) => {
+    const movements = getAccountMovements(transaction)
+      .filter((movement) => movement.accountId === "mandiri");
+    const totals = movements.reduce((result, movement) => {
+      if (movement.amount < 0) result.out += Math.abs(movement.amount);
+      if (movement.amount > 0) result.in += movement.amount;
+      return result;
+    }, { in: 0, out: 0 });
+    const row = document.createElement("tr");
+
+    [formatDate(transaction.date), transaction.type, transaction.description || "-"].forEach((value) => {
+      const cell = document.createElement("td");
+      cell.textContent = value;
+      row.append(cell);
+    });
+
+    [[totals.out, "ledger-out"], [totals.in, "ledger-in"]].forEach(([amount, className]) => {
+      const cell = document.createElement("td");
+      cell.className = `ledger-amount ${className}`;
+      cell.textContent = amount ? money(amount) : "—";
+      row.append(cell);
+    });
+
+    const actionsCell = document.createElement("td");
+    const actions = document.createElement("div");
+    actions.className = "transaction-actions ledger-actions";
+    [
+      { action: "edit", label: "Edit" },
+      { action: "delete", label: "Hapus", className: "delete" }
+    ].forEach(({ action, label, className }) => {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.dataset.action = action;
+      button.dataset.id = transaction.id;
+      button.textContent = label;
+      button.setAttribute("aria-label", `${label} transaksi ${transaction.type}`);
+      if (className) button.classList.add(className);
+      actions.append(button);
+    });
+    actionsCell.append(actions);
+    row.append(actionsCell);
+    body.append(row);
+  });
+  table.append(body);
+
+  const wrapper = document.createElement("div");
+  wrapper.className = "mandiri-ledger-scroll";
+  wrapper.append(table);
+  container.replaceChildren(wrapper);
 }
 
 function renderHistory() {

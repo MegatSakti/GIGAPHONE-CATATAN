@@ -613,6 +613,105 @@ h2 {
   padding: 14px;
 }
 
+.mandiri-ledger-scroll {
+  overflow-x: auto;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: #fff;
+}
+
+.mandiri-ledger-table {
+  width: 100%;
+  min-width: 760px;
+  border-collapse: collapse;
+  font-size: 0.82rem;
+}
+
+.mandiri-ledger-table th,
+.mandiri-ledger-table td {
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--line);
+  text-align: left;
+  vertical-align: middle;
+}
+
+.mandiri-ledger-table th {
+  position: sticky;
+  top: 0;
+  background: var(--blue-050);
+  color: var(--blue-900);
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.mandiri-ledger-table tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+.mandiri-ledger-table tbody tr:hover {
+  background: #f8fbff;
+}
+
+.mandiri-ledger-table td:nth-child(3) {
+  min-width: 180px;
+  max-width: 280px;
+  overflow-wrap: anywhere;
+}
+
+.mandiri-ledger-table .ledger-amount {
+  text-align: right;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+.ledger-out {
+  color: var(--danger);
+}
+
+.ledger-in {
+  color: var(--success);
+}
+
+.mandiri-ledger-table .ledger-actions {
+  min-width: 150px;
+  margin: 0;
+}
+
+.ledger-disclosure > summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  cursor: pointer;
+  list-style: none;
+}
+
+.ledger-disclosure > summary::-webkit-details-marker {
+  display: none;
+}
+
+.ledger-disclosure > summary h2 {
+  margin: 0;
+}
+
+.ledger-disclosure-arrow {
+  width: 10px;
+  height: 10px;
+  margin-right: 3px;
+  border-right: 2px solid var(--blue-700);
+  border-bottom: 2px solid var(--blue-700);
+  transform: rotate(45deg);
+  transition: transform 160ms ease;
+}
+
+.ledger-disclosure[open] .ledger-disclosure-arrow {
+  transform: rotate(225deg);
+}
+
+.ledger-disclosure[open] .list {
+  margin-top: 14px;
+}
+
 .transaction-head,
 .transaction-money,
 .breakdown-row,

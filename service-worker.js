@@ -1,9 +1,9 @@
-const CACHE_NAME = "gigaphone-finance-v30-cash-quick-actions";
+const CACHE_NAME = "gigaphone-finance-v34-hide-duplicate-hp-list";
 const ASSETS = [
   "./",
   "./index.html",
   "./style.css",
-  "./app.js?v=20261127-cash-quick-actions",
+  "./app.js?v=20261127-hide-duplicate-hp-list",
   "./manifest.json",
   "./icon-192.png",
   "./assets/account-logos/cash.svg",

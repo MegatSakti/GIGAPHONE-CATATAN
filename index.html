@@ -120,12 +120,16 @@
               <span>Aksesoris</span>
             </button>
           </div>
-          <div class="list" id="hpServiceTransactions"></div>
         </div>
 
         <div class="panel">
-          <h2>Mutasi Bank Mandiri</h2>
-          <div class="list" id="mandiriTransactions"></div>
+          <details class="ledger-disclosure">
+            <summary>
+              <h2>Mutasi Bank Mandiri</h2>
+              <span class="ledger-disclosure-arrow" aria-hidden="true"></span>
+            </summary>
+            <div class="list" id="mandiriTransactions"></div>
+          </details>
         </div>
       </section>
 
@@ -346,6 +350,6 @@
     <div class="empty-state">Belum ada data.</div>
   </template>
 
-  <script src="app.js?v=20261127-cash-quick-actions"></script>
+  <script src="app.js?v=20261127-hide-duplicate-hp-list"></script>
 </body>
 </html>
