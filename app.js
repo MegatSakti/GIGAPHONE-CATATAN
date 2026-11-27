@@ -23,7 +23,8 @@ const TRANSACTION_TYPES = [
 
 const HP_SERVICE_TYPES = new Set(["Jual Beli HP", "Service HP", "Aksesoris", "Service / JB HP"]);
 const QUICK_ACTION_TYPES = TRANSACTION_TYPES.filter((type) =>
-  !HP_SERVICE_TYPES.has(type) && type !== "Transfer Bank" && type !== "Setor Tunai" && type !== "Tebus Gadai"
+  !HP_SERVICE_TYPES.has(type) && type !== "Belanja Kebutuhan" && type !== "Tarik Tunai" &&
+  type !== "Transfer Bank" && type !== "Setor Tunai" && type !== "Tebus Gadai"
 );
 
 const ACCOUNT_DEFAULTS = [
@@ -284,7 +285,7 @@ function bindEvents() {
     button.addEventListener("click", () => navigate(button.dataset.nav));
   });
 
-  [el.quickActions, el.hpServiceActions].forEach((container) => container.addEventListener("click", (event) => {
+  [el.quickActions, el.hpServiceActions, el.dashboardAccounts].forEach((container) => container.addEventListener("click", (event) => {
     const button = event.target.closest("button[data-type]");
     if (!button) return;
     resetForm();
@@ -458,9 +459,9 @@ function saveTransaction(event) {
   const selectedAccountId = el.accountInput.value;
   const cashId = state.accounts.find((account) => account.id === "cash")?.id || "cash";
   const sourceAccountId = isCashWithdraw || isCashDeposit ? cashId : selectedAccountId;
-  const destinationAccountId = isCashWithdraw
+  const destinationAccountId = isCashWithdraw || isCashDeposit
     ? selectedAccountId
-    : isCashDeposit || isTopUpTransaction || isBankTransfer
+    : isTopUpTransaction || isBankTransfer
       ? cashId
       : selectedAccountId;
   const movements = isFeeTopUpTransaction
@@ -603,7 +604,7 @@ function getTransactionMoneyFlow(transaction) {
     }
   } else if (transaction.type === "Setor Tunai") {
     sourceAccountId = cashId;
-    destinationAccountId = transaction.destinationAccountId || accountId;
+    destinationAccountId = accountId || transaction.destinationAccountId;
   } else if (transaction.type === "Tarik Tunai") {
     sourceAccountId = cashId;
     destinationAccountId = accountId;
@@ -1062,6 +1063,13 @@ function renderDashboard() {
       </button>
       <strong>${money(account.balance)}</strong>
       <small>${account.usesDailyBalance ? "Awal hari ini" : "Awal"} ${money(account.startingBalance)}</small>
+      ${account.id === "cash" ? `
+        <div class="account-quick-actions" aria-label="Quick Action Cash">
+          <button type="button" data-type="Belanja Kebutuhan" aria-label="Belanja">Belanja</button>
+          <button type="button" data-type="Tarik Tunai" aria-label="Tarik Tunai">Tarik Tunai</button>
+          <button type="button" data-type="Setor Tunai" aria-label="Setor Tunai">Setor Tunai</button>
+        </div>
+      ` : ""}
     </article>
   `).join("");
 
@@ -1431,6 +1439,15 @@ function getAccountMovements(transaction) {
     return [
       ...(cashAccountId ? [{ accountId: cashAccountId, amount: -nominal }] : []),
       ...(bankAccountId ? [{ accountId: bankAccountId, amount: cashReceivedByBank }] : [])
+    ];
+  }
+
+  if (transaction.type === "Setor Tunai") {
+    const bankAccountId = transaction.accountId || transaction.destinationAccountId;
+    const nominal = Number(transaction.cost) || 0;
+    return [
+      { accountId: "cash", amount: -nominal },
+      ...(bankAccountId ? [{ accountId: bankAccountId, amount: nominal }] : [])
     ];
   }
 
